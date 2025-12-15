@@ -135,6 +135,18 @@ class VoyageEmbedder:
         Uses voyage-context-3 which considers the full document context
         when embedding each chunk.
 
+        NOTE: This method is implemented but not yet wired into the main
+        ingestion flow. The RAG engine's embedding happens at the storage layer
+        without document grouping context. Wiring this requires refactoring
+        to group chunks by document before embedding, which is a future enhancement.
+
+        To use manually:
+            embedder = VoyageEmbedder(api_key="...")
+            embeddings = await embedder.embed_contextualized_async([
+                ["doc1_chunk1", "doc1_chunk2"],  # Chunks from document 1
+                ["doc2_chunk1"],                  # Chunks from document 2
+            ])
+
         Args:
             chunks_by_document: List of lists, where each inner list contains
                                chunks from a single document.

@@ -46,6 +46,7 @@ class QueryParam:
 
 from ..config.settings import Settings, get_settings
 from ..enhancements.entity_boosting import create_boosted_rerank_func
+from ..enhancements.implicit_expansion import ImplicitExpander
 from ..integrations import (
     log_rag_query,
     log_ingestion,
@@ -263,6 +264,62 @@ class HybridRAG:
             )
         return self._rag_engine
 
+    async def _expand_query_with_entities(
+        self,
+        query: str,
+        rag: _RAGEngine,
+        max_entities: int = 5,
+    ) -> str:
+        """
+        Expand query with semantically related entities using vector search.
+
+        This implements implicit expansion - finding entities similar to the query
+        that may not have explicit graph connections but are semantically related.
+
+        Args:
+            query: Original search query
+            rag: RAG engine instance with entities_vdb
+            max_entities: Maximum number of entities to add
+
+        Returns:
+            Expanded query with related entity names
+        """
+        try:
+            # Query the entity vector database for similar entities
+            similar_entities = await rag.entities_vdb.query(query, top_k=max_entities)
+
+            if not similar_entities:
+                logger.debug("[IMPLICIT_EXPANSION] No similar entities found")
+                return query
+
+            # Extract entity names from results
+            # Official LightRAG uses meta_fields={"entity_name", "source_id", "content", "file_path"}
+            # MongoDB storage returns "id" mapped from "_id", plus all meta_fields
+            entity_names = []
+            for entity in similar_entities:
+                # Primary: entity_name (official meta_field), fallback: id (from MongoDB _id)
+                name = entity.get("entity_name") or entity.get("id")
+                if name and name.lower() not in query.lower():
+                    entity_names.append(name)
+
+            if not entity_names:
+                logger.debug("[IMPLICIT_EXPANSION] No new entities to add")
+                return query
+
+            # Augment query with related entity terms
+            # Format: "original query (related: entity1, entity2, ...)"
+            related_terms = ", ".join(entity_names[:max_entities])
+            expanded_query = f"{query} (related concepts: {related_terms})"
+
+            logger.info(
+                f"[IMPLICIT_EXPANSION] Expanded query with {len(entity_names)} entities: {related_terms[:100]}..."
+            )
+            return expanded_query
+
+        except Exception as e:
+            logger.warning(f"[IMPLICIT_EXPANSION] Failed to expand query: {e}")
+            return query  # Fall back to original query on error
+
     async def insert(
         self,
         documents: str | Sequence[str],
@@ -358,6 +415,13 @@ class HybridRAG:
         logger.info(f"[QUERY] Mode: {resolved_mode}, top_k: {resolved_top_k}, rerank_top_k: {resolved_rerank_top_k}")
         logger.info(f"[QUERY] Rerank enabled: {resolved_enable_rerank}, only_context: {only_context}")
 
+        # Apply implicit expansion if enabled
+        expanded_query = query
+        if self.settings.enable_implicit_expansion and hasattr(rag, 'entities_vdb'):
+            expanded_query = await self._expand_query_with_entities(query, rag)
+            if expanded_query != query:
+                logger.info(f"[QUERY] Implicit expansion applied, query expanded")
+
         # Build query parameters with defaults from settings
         param = QueryParam(
             mode=resolved_mode,
@@ -370,8 +434,8 @@ class HybridRAG:
         try:
             logger.info("[QUERY] Executing query...")
             response = await rag.aquery(
-                query=query,
-                param=param,
+                query=expanded_query,
+                param=param._to_internal(),  # Convert to internal QueryParam
                 system_prompt=system_prompt,
             )
 

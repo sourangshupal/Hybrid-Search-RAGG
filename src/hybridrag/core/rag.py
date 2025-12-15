@@ -18,10 +18,10 @@ import sys
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Callable, Literal, Sequence
 
-# Internal RAG engine imports
-from lightrag import LightRAG as _RAGEngine
-from lightrag import QueryParam as _QueryParam
-from lightrag.base import EmbeddingFunc
+# Internal RAG engine imports (bundled in hybridrag.engine)
+from ..engine import RAGEngine as _RAGEngine
+from ..engine import QueryParam as _QueryParam
+from ..engine import EmbeddingFunc
 
 
 # Re-export QueryParam with our own name
@@ -240,7 +240,7 @@ class HybridRAG:
         logger.info("[INIT] Storage backends initialized (KV, Vector, Graph, DocStatus)")
 
         # Initialize pipeline status
-        from lightrag.kg.shared_storage import initialize_pipeline_status
+        from ..engine.kg.shared_storage import initialize_pipeline_status
         logger.info("[INIT] Initializing pipeline status...")
         await initialize_pipeline_status()
 

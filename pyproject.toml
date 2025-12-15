@@ -3,7 +3,7 @@ requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "hybridrag"
+name = "mongodb-hybridrag"
 version = "0.3.0"
 description = "State-of-the-art RAG system with MongoDB Atlas and Voyage AI"
 readme = "README.md"
@@ -92,7 +92,7 @@ dev = [
     "ruff>=0.2.0",
 ]
 all = [
-    "hybridrag[api,ui,observability,evaluation,dev]",
+    "mongodb-hybridrag[api,ui,observability,evaluation,dev]",
 ]
 
 [project.urls]

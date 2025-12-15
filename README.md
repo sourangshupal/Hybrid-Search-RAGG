@@ -26,15 +26,12 @@ State-of-the-art Retrieval-Augmented Generation (RAG) system powered by MongoDB 
 ### Installation
 
 ```bash
-# Clone the repository
+# Install from PyPI
+pip install mongodb-hybridrag
+
+# Or install from source
 git clone https://github.com/romiluz13/Hybrid-Search-RAG.git
-cd hybridrag
-
-# Create virtual environment
-python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-
-# Install dependencies
+cd Hybrid-Search-RAG
 pip install -e .
 ```
 

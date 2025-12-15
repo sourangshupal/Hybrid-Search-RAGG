@@ -1,0 +1,76 @@
+# Secrets
+.env
+.env.local
+*.key
+*.pem
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+.eggs/
+dist/
+build/
+.installed.cfg
+*.manifest
+*.spec
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Testing
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+*.py,cover
+
+# Logs
+*.log
+*.log.*
+
+# Data files
+*.pdf
+hybridrag_workspace/
+test_workspace/
+test_data/
+lightrag-fork/
+
+# Test scripts with internal data references
+run_chat_simulation.py
+ingest_langsam.py
+chat_simulation_results.json
+
+# Internal development (keep locally, exclude from repo)
+.claude/
+build-process/
+planning/
+research/
+CLAUDE.md
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/
+
+# mypy
+.mypy_cache/

@@ -1,0 +1,36 @@
+# HybridRAG Dependencies
+
+# Core
+numpy>=1.24.0
+python-dotenv>=1.0.0
+
+# Voyage AI
+voyageai>=0.3.0
+
+# Anthropic
+anthropic>=0.39.0
+
+# Google Gemini
+google-generativeai>=0.8.0
+
+# MongoDB
+pymongo>=4.6.0
+motor>=3.3.0
+
+# Async and processing
+tiktoken>=0.8.0
+tenacity>=9.0.0
+aioboto3>=13.2.0
+aiohttp>=3.11.9
+
+# Observability (Langfuse)
+langfuse>=2.0.0
+
+# Evaluation (RAGAS)
+ragas>=0.2.0
+datasets>=2.14.0
+langchain-openai>=0.2.0
+
+# Development
+pytest>=7.0.0
+pytest-asyncio>=0.23.0

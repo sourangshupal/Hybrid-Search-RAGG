@@ -1,0 +1,19 @@
+{
+  "test_cases": [
+    {
+      "question": "What is the main purpose of the document?",
+      "ground_truth": "The document describes the main concepts and purpose of the subject matter.",
+      "project": "sample"
+    },
+    {
+      "question": "What are the key features mentioned?",
+      "ground_truth": "The key features include various capabilities and functions described in the document.",
+      "project": "sample"
+    },
+    {
+      "question": "How does the system work?",
+      "ground_truth": "The system works by processing and analyzing information according to the methods described.",
+      "project": "sample"
+    }
+  ]
+}

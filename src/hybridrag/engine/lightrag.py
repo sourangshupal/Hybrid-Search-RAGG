@@ -87,6 +87,7 @@ from .base import (
 from .namespace import NameSpace
 from .operate import (
     chunking_by_token_size,
+    chunking_by_docling,
     extract_entities,
     merge_nodes_and_edges,
     kg_query,

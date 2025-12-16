@@ -109,7 +109,7 @@ async def test_initialization(results: TestResults) -> HybridRAG | None:
 
     try:
         rag = await create_hybridrag(
-            working_dir="./test_workspace",
+            working_dir="./_internal/test_workspace",
             auto_initialize=True,
         )
 

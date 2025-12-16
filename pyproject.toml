@@ -74,6 +74,14 @@ ui = [
     "chainlit>=1.0.0",
     "pymupdf>=1.23.0",
 ]
+cli = [
+    "rich>=13.0.0",
+]
+ingestion = [
+    "docling>=2.0.0",
+    "docling-core>=2.0.0",
+    "transformers>=4.30.0",
+]
 observability = [
     "langfuse>=2.0.0",
 ]
@@ -92,8 +100,11 @@ dev = [
     "ruff>=0.2.0",
 ]
 all = [
-    "mongodb-hybridrag[api,ui,observability,evaluation,dev]",
+    "mongodb-hybridrag[api,ui,cli,ingestion,observability,evaluation,dev]",
 ]
+
+[project.scripts]
+hybridrag = "hybridrag.cli:run_cli"
 
 [project.urls]
 Homepage = "https://github.com/romiluz13/Hybrid-Search-RAG"

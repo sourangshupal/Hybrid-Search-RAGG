@@ -1,0 +1,272 @@
+#!/usr/bin/env python3
+"""
+HybridRAG CLI - Interactive conversational interface.
+
+Provides a Rich-based terminal UI for:
+- Natural language queries against the knowledge base
+- Multi-turn conversations with memory
+- Real-time streaming responses
+- System status and configuration info
+"""
+
+from __future__ import annotations
+
+import asyncio
+import sys
+from typing import TYPE_CHECKING
+
+try:
+    from rich.console import Console
+    from rich.panel import Panel
+    from rich.prompt import Prompt
+    from rich.markdown import Markdown
+    from rich.live import Live
+    RICH_AVAILABLE = True
+except ImportError:
+    RICH_AVAILABLE = False
+
+from ..core.rag import HybridRAG, create_hybridrag
+from ..config.settings import Settings, get_settings
+
+if TYPE_CHECKING:
+    pass
+
+
+# Initialize console
+console = Console() if RICH_AVAILABLE else None
+
+
+def display_welcome(settings: Settings) -> None:
+    """Display welcome message with configuration info."""
+    if not RICH_AVAILABLE:
+        print("=" * 60)
+        print("HybridRAG CLI - Intelligent Knowledge Base Search")
+        print("=" * 60)
+        print(f"LLM Provider: {settings.llm_provider}")
+        print(f"Database: {settings.mongodb_database}")
+        print("Commands: 'exit', 'info', 'clear', 'new' (new session)")
+        print("=" * 60)
+        return
+
+    welcome = Panel(
+        "[bold blue]HybridRAG CLI[/bold blue]\n\n"
+        "[green]Intelligent knowledge base search with MongoDB Atlas + Voyage AI[/green]\n\n"
+        f"[dim]LLM Provider: {settings.llm_provider}[/dim]\n"
+        f"[dim]Database: {settings.mongodb_database}[/dim]\n\n"
+        "[dim]Commands: 'exit' to quit, 'info' for status, 'clear' to clear, 'new' for new session[/dim]",
+        style="blue",
+        padding=(1, 2),
+    )
+    console.print(welcome)
+    console.print()
+
+
+async def display_status(rag: HybridRAG) -> None:
+    """Display system status information."""
+    status = await rag.get_status()
+
+    if not RICH_AVAILABLE:
+        print("\n=== System Status ===")
+        for key, value in status.items():
+            print(f"{key}: {value}")
+        print("=====================\n")
+        return
+
+    status_text = "\n".join(
+        f"[cyan]{key}:[/cyan] {value}"
+        for key, value in status.items()
+    )
+    panel = Panel(
+        status_text,
+        title="[bold]System Status[/bold]",
+        style="green",
+    )
+    console.print(panel)
+    console.print()
+
+
+async def process_query(
+    rag: HybridRAG,
+    query: str,
+    session_id: str,
+) -> str:
+    """
+    Process a user query and return the response.
+
+    Args:
+        rag: HybridRAG instance
+        query: User query text
+        session_id: Conversation session ID
+
+    Returns:
+        Response text from RAG system
+    """
+    try:
+        result = await rag.query_with_memory(
+            query=query,
+            session_id=session_id,
+            mode="mix",
+            top_k=10,
+        )
+        return result.get("answer", "No response generated.")
+    except Exception as e:
+        return f"Error processing query: {e}"
+
+
+def display_response(response: str) -> None:
+    """Display the assistant response."""
+    if not RICH_AVAILABLE:
+        print(f"\nAssistant: {response}\n")
+        return
+
+    # Render as markdown for better formatting
+    console.print("[bold blue]Assistant:[/bold blue]")
+    try:
+        md = Markdown(response)
+        console.print(md)
+    except Exception:
+        console.print(response)
+    console.print()
+
+
+def get_user_input() -> str:
+    """Get input from the user."""
+    if not RICH_AVAILABLE:
+        return input("You: ").strip()
+
+    return Prompt.ask("[bold green]You[/bold green]")
+
+
+async def conversation_loop(rag: HybridRAG) -> None:
+    """
+    Main conversation loop.
+
+    Args:
+        rag: Initialized HybridRAG instance
+    """
+    import uuid
+
+    # Create a new session for this conversation
+    session_id = str(uuid.uuid4())
+
+    if RICH_AVAILABLE:
+        console.print(f"[dim]Session: {session_id[:8]}...[/dim]\n")
+    else:
+        print(f"Session: {session_id[:8]}...\n")
+
+    while True:
+        try:
+            # Get user input
+            user_input = get_user_input()
+
+            if not user_input:
+                continue
+
+            # Handle commands
+            command = user_input.lower().strip()
+
+            if command in ("exit", "quit", "q"):
+                if RICH_AVAILABLE:
+                    console.print("[yellow]Goodbye![/yellow]")
+                else:
+                    print("Goodbye!")
+                break
+
+            if command == "info":
+                await display_status(rag)
+                continue
+
+            if command == "clear":
+                if RICH_AVAILABLE:
+                    console.clear()
+                else:
+                    print("\033c", end="")
+                display_welcome(rag.settings)
+                continue
+
+            if command == "new":
+                session_id = str(uuid.uuid4())
+                if RICH_AVAILABLE:
+                    console.print(f"[green]New session created: {session_id[:8]}...[/green]\n")
+                else:
+                    print(f"New session created: {session_id[:8]}...\n")
+                continue
+
+            if command == "history":
+                history = await rag.get_conversation_history(session_id, limit=10)
+                if not history:
+                    if RICH_AVAILABLE:
+                        console.print("[dim]No conversation history yet.[/dim]")
+                    else:
+                        print("No conversation history yet.")
+                else:
+                    for msg in history:
+                        role = msg.get("role", "unknown").capitalize()
+                        content = msg.get("content", "")[:100]
+                        if RICH_AVAILABLE:
+                            console.print(f"[cyan]{role}:[/cyan] {content}...")
+                        else:
+                            print(f"{role}: {content}...")
+                console.print() if RICH_AVAILABLE else print()
+                continue
+
+            # Process the query
+            if RICH_AVAILABLE:
+                with console.status("[bold blue]Thinking...[/bold blue]"):
+                    response = await process_query(rag, user_input, session_id)
+            else:
+                print("Thinking...")
+                response = await process_query(rag, user_input, session_id)
+
+            # Display the response
+            display_response(response)
+
+        except KeyboardInterrupt:
+            if RICH_AVAILABLE:
+                console.print("\n[yellow]Interrupted. Type 'exit' to quit.[/yellow]")
+            else:
+                print("\nInterrupted. Type 'exit' to quit.")
+            continue
+        except EOFError:
+            break
+
+
+async def main() -> None:
+    """Main entry point for the CLI."""
+    settings = get_settings()
+
+    # Display welcome
+    display_welcome(settings)
+
+    # Initialize HybridRAG
+    if RICH_AVAILABLE:
+        with console.status("[bold green]Initializing HybridRAG...[/bold green]"):
+            rag = await create_hybridrag(settings=settings)
+    else:
+        print("Initializing HybridRAG...")
+        rag = await create_hybridrag(settings=settings)
+
+    if RICH_AVAILABLE:
+        console.print("[green]Ready![/green]\n")
+    else:
+        print("Ready!\n")
+
+    # Start conversation loop
+    await conversation_loop(rag)
+
+
+def run_cli() -> None:
+    """Run the CLI (synchronous entry point)."""
+    if not RICH_AVAILABLE:
+        print("Warning: 'rich' package not installed. Using basic output.")
+        print("Install with: pip install rich\n")
+
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\nGoodbye!")
+        sys.exit(0)
+
+
+if __name__ == "__main__":
+    run_cli()

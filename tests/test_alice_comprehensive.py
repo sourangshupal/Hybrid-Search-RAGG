@@ -152,12 +152,12 @@ async def main():
     )
 
     print("[TEST] Initializing HybridRAG...")
-    rag = await create_hybridrag(settings)
+    rag = await create_hybridrag(settings, working_dir="./_internal/hybridrag_alice_test")
     print("[PASS] HybridRAG initialized")
     print()
 
     # Read the book
-    book_path = os.path.join(os.path.dirname(__file__), "..", "test_data", "alice_in_wonderland.txt")
+    book_path = os.path.join(os.path.dirname(__file__), "..", "_internal", "test_data", "alice_in_wonderland.txt")
     if not os.path.exists(book_path):
         print(f"[ERROR] Book not found at {book_path}")
         return

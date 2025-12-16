@@ -47,6 +47,12 @@ class QueryParam:
 from ..config.settings import Settings, get_settings
 from ..enhancements.entity_boosting import create_boosted_rerank_func
 from ..enhancements.implicit_expansion import ImplicitExpander
+from ..ingestion import (
+    DocumentIngestionPipeline,
+    IngestionConfig,
+    IngestionResult,
+    ChunkingConfig,
+)
 from ..integrations import (
     log_rag_query,
     log_ingestion,
@@ -57,6 +63,7 @@ from ..integrations import (
 from ..memory import ConversationMemory
 
 if TYPE_CHECKING:
+    from pathlib import Path
     from collections.abc import Callable, Sequence
 
     import numpy as np
@@ -376,6 +383,217 @@ class HybridRAG:
         except Exception as e:
             logger.error(f"[INSERT] Error during insertion: {e}")
             raise
+
+    async def ingest_files(
+        self,
+        folder_path: str | "Path",
+        config: IngestionConfig | None = None,
+        progress_callback: Callable[[int, int], None] | None = None,
+    ) -> list[IngestionResult]:
+        """
+        Ingest documents from a folder using Docling document processor.
+
+        This method uses the new ingestion pipeline that supports:
+        - Multi-format documents: PDF, Word, PPT, Excel, HTML, Markdown
+        - Audio transcription via Whisper ASR
+        - Structure-aware chunking via Docling HybridChunker
+        - Automatic embedding generation
+
+        Args:
+            folder_path: Path to folder containing documents.
+            config: Optional ingestion configuration. Defaults to sensible values.
+            progress_callback: Optional callback for progress updates (current, total).
+
+        Returns:
+            List of IngestionResult objects with details of each ingestion.
+
+        Example:
+            ```python
+            rag = HybridRAG()
+            await rag.initialize()
+
+            # Ingest all documents from a folder
+            results = await rag.ingest_files("./documents")
+
+            # Check results
+            for r in results:
+                if r.success:
+                    print(f"✓ {r.title}: {r.chunks_created} chunks")
+                else:
+                    print(f"✗ {r.title}: {r.errors}")
+            ```
+        """
+        self._ensure_initialized()
+
+        logger.info(f"[INGEST_FILES] ========== Starting File Ingestion ==========")
+        logger.info(f"[INGEST_FILES] Folder: {folder_path}")
+
+        # Get MongoDB database for the pipeline
+        from motor.motor_asyncio import AsyncIOMotorClient
+
+        client = AsyncIOMotorClient(self.settings.mongodb_uri.get_secret_value())
+        db = client[self.settings.mongodb_database]
+
+        # Create embedding function wrapper for the pipeline
+        def pipeline_embed_func(texts: list[str]) -> list[list[float]]:
+            """Wrapper to use HybridRAG's embedding function."""
+            from ..integrations.voyage import create_embedding_func
+
+            embed_func = create_embedding_func(
+                api_key=self.settings.voyage_api_key.get_secret_value(),
+                model=self.settings.voyage_embedding_model,
+                batch_size=self.settings.embedding_batch_size,
+            )
+            # embed_func returns np.ndarray, convert to list
+            result = embed_func(texts)
+            return result.tolist() if hasattr(result, "tolist") else list(result)
+
+        # Use default config if not provided
+        if config is None:
+            config = IngestionConfig(
+                chunking=ChunkingConfig(
+                    max_tokens=512,
+                    chunk_size=1000,
+                    chunk_overlap=200,
+                    tokenizer_model="sentence-transformers/all-MiniLM-L6-v2",
+                ),
+                clean_before_ingest=False,  # Don't clean by default
+                batch_size=self.settings.embedding_batch_size,
+                enable_audio_transcription=True,
+            )
+
+        # Create and run the ingestion pipeline
+        pipeline = DocumentIngestionPipeline(
+            db=db,
+            embedding_func=pipeline_embed_func,
+            config=config,
+            documents_collection="ingested_documents",
+            chunks_collection="ingested_chunks",
+        )
+
+        import time as _time
+        start_time = _time.time()
+
+        results = await pipeline.ingest_folder(folder_path, progress_callback)
+
+        duration = _time.time() - start_time
+
+        # Summary statistics
+        total_docs = len(results)
+        successful = sum(1 for r in results if r.success)
+        total_chunks = sum(r.chunks_created for r in results)
+        total_errors = sum(len(r.errors) for r in results)
+
+        logger.info(f"[INGEST_FILES] ========== File Ingestion Complete ==========")
+        logger.info(f"[INGEST_FILES] Documents: {successful}/{total_docs} successful")
+        logger.info(f"[INGEST_FILES] Total chunks: {total_chunks}")
+        logger.info(f"[INGEST_FILES] Duration: {duration:.2f}s")
+        if total_errors > 0:
+            logger.warning(f"[INGEST_FILES] Errors: {total_errors}")
+
+        # Now insert the chunks into the main RAG system for KG extraction
+        # Read back the chunks from MongoDB and insert them
+        if successful > 0:
+            logger.info("[INGEST_FILES] Inserting chunks into RAG for KG extraction...")
+            chunks_col = db["ingested_chunks"]
+            cursor = chunks_col.find({})
+            chunks_data = await cursor.to_list(length=None)
+
+            if chunks_data:
+                # Extract content and file paths for RAG insertion
+                contents = [c["content"] for c in chunks_data]
+                file_paths = [c.get("metadata", {}).get("source", "unknown") for c in chunks_data]
+
+                # Insert into main RAG (this builds the knowledge graph)
+                await self.insert(
+                    documents=contents,
+                    file_paths=file_paths,
+                )
+                logger.info(f"[INGEST_FILES] Inserted {len(contents)} chunks into RAG system")
+
+        # Close the motor client
+        client.close()
+
+        # Log to Langfuse if enabled
+        if langfuse_enabled():
+            log_ingestion(
+                file_name=str(folder_path),
+                num_chunks=total_chunks,
+                num_entities=0,
+                num_relations=0,
+                duration_seconds=duration,
+                metadata={
+                    "total_documents": total_docs,
+                    "successful_documents": successful,
+                    "total_errors": total_errors,
+                    "source": "ingest_files",
+                },
+            )
+
+        return results
+
+    async def ingest_file(
+        self,
+        file_path: str | "Path",
+        config: IngestionConfig | None = None,
+    ) -> IngestionResult:
+        """
+        Ingest a single file using Docling document processor.
+
+        Convenience method that wraps ingest_files() for single file ingestion.
+
+        Args:
+            file_path: Path to the file to ingest.
+            config: Optional ingestion configuration.
+
+        Returns:
+            IngestionResult with details of the ingestion.
+
+        Example:
+            ```python
+            rag = HybridRAG()
+            await rag.initialize()
+
+            result = await rag.ingest_file("./report.pdf")
+            if result.success:
+                print(f"Ingested {result.chunks_created} chunks")
+            ```
+        """
+        from pathlib import Path as PathLib
+
+        file_path = PathLib(file_path).resolve()
+
+        if not file_path.exists():
+            return IngestionResult(
+                document_id="",
+                title=file_path.name,
+                chunks_created=0,
+                processing_time_ms=0,
+                errors=[f"File not found: {file_path}"],
+                source=str(file_path),
+            )
+
+        # Create a temp folder with just this file (symlink or copy)
+        import tempfile
+        import shutil
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_file = PathLib(temp_dir) / file_path.name
+            shutil.copy(file_path, temp_file)
+
+            results = await self.ingest_files(temp_dir, config)
+
+            if results:
+                return results[0]
+            else:
+                return IngestionResult(
+                    document_id="",
+                    title=file_path.name,
+                    chunks_created=0,
+                    processing_time_ms=0,
+                    errors=["No results returned from ingestion"],
+                    source=str(file_path),
+                )
 
     async def query(
         self,

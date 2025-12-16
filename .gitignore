@@ -75,9 +75,13 @@ Thumbs.db
 # mypy
 .mypy_cache/
 
-# Separate projects
+# Separate projects and comparisons
 mongodb-rag-agent-comparison/
+*audit*/
+audit/
 
 # Build artifacts
 src/hybridrag.egg-info/
 src/mongodb_hybridrag.egg-info/
+
+_internal/

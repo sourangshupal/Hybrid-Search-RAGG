@@ -96,6 +96,94 @@ def _truncate_entity_identifier(
     return display_value
 
 
+def chunking_by_docling(
+    tokenizer: Tokenizer,
+    content: str,
+    split_by_character: str | None = None,
+    split_by_character_only: bool = False,
+    chunk_overlap_token_size: int = 100,
+    chunk_token_size: int = 1200,
+) -> list[dict[str, Any]]:
+    """
+    Structure-aware chunking using Docling HybridChunker.
+
+    This chunker uses Docling's built-in HybridChunker which:
+    - Respects document structure (sections, paragraphs, tables)
+    - Is token-aware (fits embedding model limits)
+    - Preserves semantic coherence
+    - Includes heading context in chunks
+
+    Falls back to chunking_by_token_size when:
+    - Docling/transformers not available
+    - DoclingDocument parsing fails
+
+    Args:
+        tokenizer: Tokenizer instance (used for fallback counting).
+        content: The text to be split into chunks.
+        split_by_character: Ignored by Docling chunker (structure-aware).
+        split_by_character_only: Ignored by Docling chunker.
+        chunk_overlap_token_size: Ignored (Docling handles overlap internally).
+        chunk_token_size: Maximum tokens per chunk.
+
+    Returns:
+        List of chunk dictionaries with tokens, content, chunk_order_index.
+    """
+    try:
+        from ..ingestion.chunker import DoclingHybridChunker
+        from ..ingestion.types import ChunkingConfig
+
+        # Create chunker config
+        config = ChunkingConfig(
+            max_tokens=chunk_token_size,
+            chunk_size=chunk_token_size * 4,  # Approx chars
+            chunk_overlap=chunk_overlap_token_size * 4,
+            tokenizer_model="sentence-transformers/all-MiniLM-L6-v2",
+            merge_peers=True,
+        )
+
+        chunker = DoclingHybridChunker(config)
+
+        # Use sync method (no DoclingDocument available at this level)
+        chunks = chunker.chunk_text_sync(
+            content=content,
+            title="document",
+            source="lightrag",
+        )
+
+        # Convert to LightRAG format
+        results = []
+        for chunk in chunks:
+            results.append({
+                "tokens": chunk.token_count or len(tokenizer.encode(chunk.content)),
+                "content": chunk.content.strip(),
+                "chunk_order_index": chunk.index,
+            })
+
+        logger.info(f"Docling chunker created {len(results)} chunks")
+        return results
+
+    except ImportError as e:
+        logger.warning(f"Docling not available, falling back to token-based: {e}")
+        return chunking_by_token_size(
+            tokenizer=tokenizer,
+            content=content,
+            split_by_character=split_by_character,
+            split_by_character_only=split_by_character_only,
+            chunk_overlap_token_size=chunk_overlap_token_size,
+            chunk_token_size=chunk_token_size,
+        )
+    except Exception as e:
+        logger.warning(f"Docling chunking failed, falling back to token-based: {e}")
+        return chunking_by_token_size(
+            tokenizer=tokenizer,
+            content=content,
+            split_by_character=split_by_character,
+            split_by_character_only=split_by_character_only,
+            chunk_overlap_token_size=chunk_overlap_token_size,
+            chunk_token_size=chunk_token_size,
+        )
+
+
 def chunking_by_token_size(
     tokenizer: Tokenizer,
     content: str,
@@ -273,22 +361,40 @@ async def _handle_entity_relation_summary(
         )
 
         # Reduce phase: summarize each group from chunks
-        new_summaries = []
+        valid_chunks = []
+        tasks = []
         for chunk in chunks:
             if len(chunk) == 1:
                 # Optimization: single description chunks don't need LLM summarization
-                new_summaries.append(chunk[0])
+                valid_chunks.append(chunk[0])
             else:
                 # Multiple descriptions need LLM summarization
-                summary = await _summarize_descriptions(
-                    description_type,
-                    entity_or_relation_name,
-                    chunk,
-                    global_config,
-                    llm_response_cache,
+                valid_chunks.append(None)  # Placeholder to preserve order
+                task_index = len(valid_chunks) - 1
+                tasks.append(
+                    (
+                        task_index,
+                        _summarize_descriptions(
+                            description_type,
+                            entity_or_relation_name,
+                            chunk,
+                            global_config,
+                            llm_response_cache,
+                        ),
+                    )
                 )
-                new_summaries.append(summary)
-                llm_was_used = True  # Mark that LLM was used in reduce phase
+
+        if tasks:
+            llm_was_used = True
+            # Execute all summarization tasks concurrently
+            results = await asyncio.gather(*(t[1] for t in tasks))
+            
+            # Place results back into their original positions
+            for (task_index, _), result in zip(tasks, results):
+                valid_chunks[task_index] = result
+
+        # Filter out any None values (shouldn't happen but safe to check)
+        new_summaries = [s for s in valid_chunks if s is not None]
 
         # Update current list with new summaries for next iteration
         current_list = new_summaries

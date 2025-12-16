@@ -21,10 +21,10 @@ from ..types import KnowledgeGraph, KnowledgeGraphNode, KnowledgeGraphEdge
 from ..constants import GRAPH_FIELD_SEP
 from ..kg.shared_storage import get_data_init_lock
 
-import pipmaster as pm
-
-if not pm.is_installed("pymongo"):
-    pm.install("pymongo")
+# import pipmaster as pm
+# 
+# if not pm.is_installed("pymongo"):
+#     pm.install("pymongo")
 
 from pymongo import AsyncMongoClient  # type: ignore
 from pymongo import UpdateOne  # type: ignore

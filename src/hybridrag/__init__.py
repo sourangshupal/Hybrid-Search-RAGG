@@ -47,9 +47,27 @@ from .enhancements.entity_boosting import (
     create_boosted_rerank_func,
 )
 from .enhancements.implicit_expansion import ImplicitExpander
+from .enhancements.mongodb_hybrid_search import (
+    SearchResult,
+    MongoDBHybridSearchConfig,
+    manual_hybrid_search_with_rrf,
+    reciprocal_rank_fusion,
+)
 
 # Memory exports (conversation session management)
 from .memory import ConversationMemory, ConversationSession
+
+# Ingestion exports (document processing and chunking)
+from .ingestion import (
+    DocumentIngestionPipeline,
+    DocumentProcessor,
+    DoclingHybridChunker,
+    IngestionConfig,
+    IngestionResult,
+    ChunkingConfig,
+    DocumentChunk,
+    ProcessedDocument,
+)
 
 # Observability exports (Langfuse)
 from .integrations import (
@@ -73,6 +91,12 @@ except ImportError:
 # Query parameters for RAG operations
 from .core.rag import QueryParam
 
+# CLI exports (lazy import to avoid rich dependency)
+def run_cli():
+    """Run the HybridRAG CLI."""
+    from .cli import run_cli as _run_cli
+    return _run_cli()
+
 __version__ = "0.3.0"
 __all__ = [
     # Core
@@ -91,9 +115,23 @@ __all__ = [
     "EntityBoostingReranker",
     "create_boosted_rerank_func",
     "ImplicitExpander",
+    # Hybrid Search
+    "SearchResult",
+    "MongoDBHybridSearchConfig",
+    "manual_hybrid_search_with_rrf",
+    "reciprocal_rank_fusion",
     # Memory
     "ConversationMemory",
     "ConversationSession",
+    # Ingestion (document processing)
+    "DocumentIngestionPipeline",
+    "DocumentProcessor",
+    "DoclingHybridChunker",
+    "IngestionConfig",
+    "IngestionResult",
+    "ChunkingConfig",
+    "DocumentChunk",
+    "ProcessedDocument",
     # Observability (Langfuse)
     "get_langfuse",
     "flush_langfuse",
@@ -104,4 +142,6 @@ __all__ = [
     # Evaluation (RAGAS)
     "RAGEvaluator",
     "run_evaluation",
+    # CLI
+    "run_cli",
 ]

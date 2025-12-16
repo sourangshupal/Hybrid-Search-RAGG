@@ -437,15 +437,17 @@ class HybridRAG:
         # Create embedding function wrapper for the pipeline
         def pipeline_embed_func(texts: list[str]) -> list[list[float]]:
             """Wrapper to use HybridRAG's embedding function."""
-            from ..integrations.voyage import create_embedding_func
+            from ..integrations.voyage import VoyageEmbedder
 
-            embed_func = create_embedding_func(
+            # Create embedder instance
+            embedder = VoyageEmbedder(
                 api_key=self.settings.voyage_api_key.get_secret_value(),
-                model=self.settings.voyage_embedding_model,
-                batch_size=self.settings.embedding_batch_size,
+                embedding_model=self.settings.voyage_embedding_model,
+                batch_size=64,  # Reduced from default to avoid 120k token limit per batch
             )
-            # embed_func returns np.ndarray, convert to list
-            result = embed_func(texts)
+            
+            # Use sync embedding method as this runs in a thread
+            result = embedder.embed_sync(texts, input_type="document")
             return result.tolist() if hasattr(result, "tolist") else list(result)
 
         # Use default config if not provided

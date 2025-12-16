@@ -202,9 +202,65 @@ class DocumentProcessor:
 
         except Exception as e:
             logger.error(f"Docling conversion failed for {file_path}: {e}")
+            
+            # Try PyMuPDF (fitz) fallback for PDFs
+            if file_path.suffix.lower() == ".pdf":
+                try:
+                    logger.info(f"Attempting PyMuPDF (fitz) fallback for {file_path}")
+                    return self._process_pdf_fitz(file_path)
+                except Exception as fitz_e:
+                    logger.error(f"PyMuPDF fallback failed: {fitz_e}")
+            
             # Try fallback to text read
             logger.warning(f"Attempting fallback text read for {file_path}")
             return self._process_text(file_path)
+
+    def _process_pdf_fitz(self, file_path: Path) -> ProcessedDocument:
+        """
+        Process PDF using PyMuPDF (fitz).
+        
+        Args:
+            file_path: Path to PDF file.
+            
+        Returns:
+            ProcessedDocument.
+        """
+        try:
+            import fitz
+            
+            doc = fitz.open(file_path)
+            content = ""
+            
+            # Extract text from each page
+            for page in doc:
+                text = page.get_text()
+                content += text + "\n\n"
+                
+            doc.close()
+            
+            # Use filename as title if no metadata found
+            title = doc.metadata.get("title") if doc.metadata else None
+            if not title or title.strip() == "":
+                title = file_path.stem
+                
+            metadata = self._build_metadata(file_path)
+            metadata["pdf_producer"] = doc.metadata.get("producer", "unknown") if doc.metadata else "unknown"
+            
+            logger.info(f"Successfully processed PDF with PyMuPDF: {file_path.name}")
+            
+            return ProcessedDocument(
+                content=content,
+                title=title,
+                source=str(file_path),
+                metadata=metadata,
+                docling_document=None,
+                format_type="pdf",
+            )
+            
+        except ImportError:
+            raise ImportError("PyMuPDF (fitz) not installed")
+        except Exception as e:
+            raise ValueError(f"Failed to process PDF with PyMuPDF: {e}")
 
     def _process_audio(self, file_path: Path) -> ProcessedDocument:
         """

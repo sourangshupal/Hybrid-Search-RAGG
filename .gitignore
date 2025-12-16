@@ -80,6 +80,15 @@ mongodb-rag-agent-comparison/
 *audit*/
 audit/
 
+# Local scripts with internal test data
+scripts/
+
+# UV lock file (optional)
+uv.lock
+
+# Temp working directories
+.files/
+
 # Build artifacts
 src/hybridrag.egg-info/
 src/mongodb_hybridrag.egg-info/

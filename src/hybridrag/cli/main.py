@@ -210,6 +210,61 @@ async def conversation_loop(rag: HybridRAG) -> None:
                 console.print() if RICH_AVAILABLE else print()
                 continue
 
+            # Ingest command: ingest <file_or_folder_path>
+            if command.startswith("ingest "):
+                path = user_input[7:].strip()
+                if not path:
+                    if RICH_AVAILABLE:
+                        console.print("[red]Usage: ingest <file_or_folder_path>[/red]")
+                    else:
+                        print("Usage: ingest <file_or_folder_path>")
+                    continue
+
+                import os
+                if not os.path.exists(path):
+                    if RICH_AVAILABLE:
+                        console.print(f"[red]Path not found: {path}[/red]")
+                    else:
+                        print(f"Path not found: {path}")
+                    continue
+
+                try:
+                    if RICH_AVAILABLE:
+                        with console.status(f"[bold green]Ingesting {path}...[/bold green]"):
+                            if os.path.isfile(path):
+                                await rag.ingest_file(path)
+                                console.print(f"[green]Successfully ingested: {path}[/green]")
+                            else:
+                                # It's a folder - ingest all supported files
+                                count = 0
+                                for root, _, files in os.walk(path):
+                                    for f in files:
+                                        if f.endswith(('.txt', '.md', '.pdf', '.docx', '.html')):
+                                            filepath = os.path.join(root, f)
+                                            await rag.ingest_file(filepath)
+                                            count += 1
+                                console.print(f"[green]Successfully ingested {count} files from: {path}[/green]")
+                    else:
+                        print(f"Ingesting {path}...")
+                        if os.path.isfile(path):
+                            await rag.ingest_file(path)
+                            print(f"Successfully ingested: {path}")
+                        else:
+                            count = 0
+                            for root, _, files in os.walk(path):
+                                for f in files:
+                                    if f.endswith(('.txt', '.md', '.pdf', '.docx', '.html')):
+                                        filepath = os.path.join(root, f)
+                                        await rag.ingest_file(filepath)
+                                        count += 1
+                            print(f"Successfully ingested {count} files from: {path}")
+                except Exception as e:
+                    if RICH_AVAILABLE:
+                        console.print(f"[red]Error ingesting: {e}[/red]")
+                    else:
+                        print(f"Error ingesting: {e}")
+                continue
+
             # Process the query
             if RICH_AVAILABLE:
                 with console.status("[bold blue]Thinking...[/bold blue]"):

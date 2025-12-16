@@ -3,12 +3,17 @@
 # Core
 numpy>=1.24.0
 python-dotenv>=1.0.0
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
 
 # Voyage AI
 voyageai>=0.3.0
 
 # Anthropic
 anthropic>=0.39.0
+
+# OpenAI
+openai>=1.0.0
 
 # Google Gemini
 google-generativeai>=0.8.0
@@ -22,10 +27,15 @@ motor>=3.3.0
 tiktoken>=0.8.0
 tenacity>=9.0.0
 aioboto3>=13.2.0
-aioboto3>=13.2.0
 aiohttp>=3.11.9
 httpx>=0.27.0
 json_repair>=0.54.0
+
+# Document Processing (REQUIRED for production quality)
+docling>=2.0.0
+docling-core>=2.0.0
+transformers>=4.30.0
+pymupdf>=1.23.0
 
 # Observability (Langfuse)
 langfuse>=2.0.0

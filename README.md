@@ -126,6 +126,21 @@ HybridRAG combines multiple retrieval methods:
 
 ## 🚀 Quick Start
 
+### System Requirements
+
+**Hardware:**
+- **CPU**: 2+ cores (x86_64 or ARM64)
+- **RAM**: 4 GB minimum, 8 GB recommended
+- **Storage**: 5 GB free space minimum
+- **Network**: Stable internet connection
+
+**Software:**
+- **Python**: 3.11 or higher (3.12 recommended)
+- **MongoDB Atlas**: Free tier account or paid cluster
+- **API Keys**: Voyage AI (required) + at least one LLM provider (Anthropic/OpenAI/Gemini)
+
+**Note**: No GPU required! All embeddings and LLM inference are handled via API calls.
+
 ### Installation
 
 ```bash
@@ -134,6 +149,8 @@ git clone https://github.com/romiluz13/Hybrid-Search-RAG.git
 cd Hybrid-Search-RAG
 pip install -e ".[all]"
 ```
+
+For detailed installation instructions, see the [Installation Guide](docs/installation.md).
 
 ### Configuration
 
@@ -166,11 +183,14 @@ import asyncio
 from hybridrag import create_hybridrag
 
 async def main():
-    # Initialize
+    # Initialize (auto-initializes by default)
     rag = await create_hybridrag()
 
-    # Ingest documents
-    await rag.ingest("path/to/documents/")
+    # Ingest documents from folder (uses Docling processor)
+    results = await rag.ingest_files("path/to/documents/")
+    
+    # Or insert raw text directly
+    await rag.insert(["Document 1 content...", "Document 2 content..."])
 
     # Query with conversation memory
     session_id = await rag.create_conversation_session()

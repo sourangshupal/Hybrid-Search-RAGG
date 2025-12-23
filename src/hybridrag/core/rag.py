@@ -199,11 +199,29 @@ class HybridRAG:
         rerank_func = None
         if self.settings.voyage_api_key:
             from ..integrations.voyage import create_rerank_func
+            from ..integrations.rerank_instructions import get_rerank_instructions
 
             logger.info(f"[INIT] Creating Voyage reranker: model={self.settings.voyage_rerank_model}")
+            
+            # Generate default instructions based on settings
+            default_instructions = None
+            if self.settings.voyage_rerank_instructions:
+                # Custom global instructions take precedence
+                default_instructions = self.settings.voyage_rerank_instructions
+                logger.info(f"[INIT] Using custom rerank instructions: '{default_instructions[:50]}...'")
+            elif self.settings.enable_smart_rerank_instructions:
+                # Use intelligent defaults for default query mode
+                default_instructions = get_rerank_instructions(
+                    query_mode=self.settings.default_query_mode,
+                    enable_smart_defaults=True,
+                )
+                if default_instructions:
+                    logger.info(f"[INIT] Using smart rerank instructions for mode '{self.settings.default_query_mode}': '{default_instructions[:50]}...'")
+            
             base_rerank = create_rerank_func(
                 api_key=self.settings.voyage_api_key.get_secret_value(),
                 model=self.settings.voyage_rerank_model,
+                default_instructions=default_instructions,
             )
 
             # Wrap with entity boosting if enabled

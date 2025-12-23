@@ -118,6 +118,38 @@ settings = Settings(
 |-------|-------------|
 | `rerank-2.5` | Latest Voyage reranking model (recommended) |
 
+### Reranking Instructions
+
+HybridRAG supports intelligent, mode-aware default instructions for reranking following Voyage AI's official patterns:
+
+```python
+# Use intelligent defaults (recommended)
+enable_smart_rerank_instructions=True  # Default
+
+# Or provide custom global instructions
+voyage_rerank_instructions="Prioritize recent sources and technical documentation"
+
+# Or disable instructions
+enable_smart_rerank_instructions=False
+voyage_rerank_instructions=None
+```
+
+**Smart Default Instructions by Mode:**
+- **mix**: Balances semantic relevance with entity-specific content
+- **local**: Prioritizes entity mentions and concrete facts
+- **global**: Favors summaries and high-level overviews
+- **hybrid**: Balances specific details with broader context
+- **naive**: Focuses on semantic similarity
+
+**Custom Instructions Examples (Following Voyage Patterns):**
+- `"Prioritize peer-reviewed sources, followed by official documentation, then general websites"`
+- `"Prioritize recent information from the last 12 months, safety concerns, and critical updates"`
+- `"Prioritize code examples and implementation details"`
+- `"Prioritize troubleshooting guides and step-by-step debugging instructions"`
+- `"Prioritize authoritative sources, followed by recent updates, then community discussions"`
+
+**Note:** Instructions follow Voyage AI's hierarchical prioritization patterns. See [Voyage AI documentation](https://www.mongodb.com/developer/products/atlas/instruction-following-reranking/) for best practices.
+
 ### LLM Providers
 
 **Anthropic Claude:**

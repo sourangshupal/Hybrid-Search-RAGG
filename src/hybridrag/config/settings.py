@@ -51,6 +51,21 @@ class Settings(BaseSettings):
         default="rerank-2.5",
         description="Voyage reranking model",
     )
+    voyage_rerank_instructions: str | None = Field(
+        default=None,
+        description="Optional custom default instructions for Voyage reranker. "
+                    "Applied to all queries unless overridden. Examples: "
+                    "'Prioritize recent sources' or 'Focus on technical documentation'. "
+                    "If None, uses intelligent mode-aware defaults when enabled.",
+    )
+    enable_smart_rerank_instructions: bool = Field(
+        default=True,
+        description="Enable intelligent mode-aware default instructions. "
+                    "When True, automatically generates context-appropriate instructions "
+                    "based on query mode (mix, local, global, etc.). "
+                    "When False, no default instructions are applied unless "
+                    "voyage_rerank_instructions is set.",
+    )
 
     # LLM Provider Selection
     llm_provider: Literal["anthropic", "openai", "gemini"] = Field(

@@ -55,6 +55,7 @@ class EntityBoostingReranker:
         chunks: Sequence[dict[str, Any]],
         relevant_entity_ids: set[str],
         top_n: int = 10,
+        **kwargs,
     ) -> list[dict[str, Any]]:
         """
         Rerank chunks with entity boosting.
@@ -86,7 +87,7 @@ class EntityBoostingReranker:
         # Stage 1: Base cross-encoder reranking
         # Request more than top_n to allow boosting to reorder
         logger.info(f"[ENTITY_BOOST] Stage 1: Calling base reranker for {min(top_n * 2, len(texts))} results")
-        reranked = await self.base_rerank_func(query, texts, top_n=min(top_n * 2, len(texts)))
+        reranked = await self.base_rerank_func(query, texts, top_n=min(top_n * 2, len(texts)), **kwargs)
         logger.info(f"[ENTITY_BOOST] Stage 1 complete: got {len(reranked)} reranked results")
 
         # Map back to chunks with metadata
@@ -160,7 +161,7 @@ class EntityBoostingReranker:
             logger.info("[ENTITY_BOOST] No entity IDs provided, falling back to base reranker")
             texts = [c.get("content") or c.get("text", "") for c in chunks]
             try:
-                result = await self.base_rerank_func(query, texts, top_n=top_n)
+                result = await self.base_rerank_func(query, texts, top_n=top_n, **kwargs)
                 logger.info(f"[ENTITY_BOOST] Base reranker returned {len(result)} results")
                 return result
             except Exception as e:
@@ -172,6 +173,7 @@ class EntityBoostingReranker:
             chunks,
             relevant_entity_ids,
             top_n,
+            **kwargs,
         )
 
 

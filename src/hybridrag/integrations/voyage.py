@@ -192,6 +192,7 @@ class VoyageReranker:
         query: str,
         documents: Sequence[str],
         top_n: int = 10,
+        instructions: str | None = None,
     ) -> list[dict]:
         """
         Rerank documents by relevance to query.
@@ -200,6 +201,9 @@ class VoyageReranker:
             query: The search query
             documents: List of document texts to rerank
             top_n: Number of top results to return
+            instructions: Optional instructions to guide reranking (e.g.,
+                        "Prioritize peer-reviewed sources"). When provided,
+                        prepended to query as "{instructions}\nQuery: {query}"
 
         Returns:
             List of dicts with 'index', 'document', 'relevance_score'
@@ -210,9 +214,18 @@ class VoyageReranker:
             logger.warning("[RERANK] Empty documents list provided, returning empty list")
             return []
 
+        # Format query with instructions if provided
+        formatted_query = query
+        if instructions:
+            # Strip whitespace and validate
+            instructions_clean = instructions.strip()
+            if instructions_clean:
+                formatted_query = f"{instructions_clean}\nQuery: {query}"
+                logger.debug(f"[RERANK] Instructions applied: '{instructions_clean[:50]}...'")
+
         try:
             result = await self._async_client.rerank(
-                query=query,
+                query=formatted_query,
                 documents=list(documents),
                 model=self.model,
                 top_k=min(top_n, len(documents)),  # Voyage API uses top_k
@@ -241,13 +254,35 @@ class VoyageReranker:
         query: str,
         documents: Sequence[str],
         top_n: int = 10,
+        instructions: str | None = None,
     ) -> list[dict]:
-        """Synchronous reranking."""
+        """
+        Synchronous reranking.
+
+        Args:
+            query: The search query
+            documents: List of document texts to rerank
+            top_n: Number of top results to return
+            instructions: Optional instructions to guide reranking (e.g.,
+                        "Prioritize peer-reviewed sources"). When provided,
+                        prepended to query as "{instructions}\nQuery: {query}"
+
+        Returns:
+            List of dicts with 'index', 'document', 'relevance_score'
+        """
         if not documents:
             return []
 
+        # Format query with instructions if provided
+        formatted_query = query
+        if instructions:
+            # Strip whitespace and validate
+            instructions_clean = instructions.strip()
+            if instructions_clean:
+                formatted_query = f"{instructions_clean}\nQuery: {query}"
+
         result = self._sync_client.rerank(
-            query=query,
+            query=formatted_query,
             documents=list(documents),
             model=self.model,
             top_k=min(top_n, len(documents)),  # Voyage API uses top_k
@@ -294,6 +329,7 @@ def create_embedding_func(
 def create_rerank_func(
     api_key: str,
     model: str = "rerank-2.5",
+    default_instructions: str | None = None,
 ) -> Callable[..., list[dict]]:
     """
     Create rerank function for HybridRAG.
@@ -301,6 +337,7 @@ def create_rerank_func(
     Args:
         api_key: Voyage AI API key
         model: Reranking model name
+        default_instructions: Optional default instructions applied to all queries
 
     Returns:
         Async function for reranking documents
@@ -311,10 +348,13 @@ def create_rerank_func(
         query: str,
         documents: list[str],
         top_n: int = 10,
+        instructions: str | None = None,
         **kwargs,
     ) -> list[dict]:
-        logger.info(f"[RERANK_FUNC] Called with query='{query[:50]}...', {len(documents)} docs, top_n={top_n}")
-        result = await reranker.rerank_async(query, documents, top_n)
+        # Use per-query instructions if provided, otherwise use default
+        final_instructions = instructions if instructions is not None else default_instructions
+        logger.info(f"[RERANK_FUNC] Called with query='{query[:50]}...', {len(documents)} docs, top_n={top_n}, has_instructions={final_instructions is not None}")
+        result = await reranker.rerank_async(query, documents, top_n, instructions=final_instructions)
         logger.info(f"[RERANK_FUNC] Returning {len(result)} results")
         return result
 

@@ -320,6 +320,141 @@ async def on_upload_files(action: cl.Action):
             await handle_file_upload_with_progress(files, rag)
 
 
+@cl.action_callback("ingest_url")
+async def on_ingest_url(action: cl.Action):
+    """Handle URL ingestion action."""
+    rag = cl.user_session.get("rag")
+    if not rag:
+        await cl.Message(content="❌ RAG system not initialized.").send()
+        return
+
+    # Ask for URL
+    url_msg = await cl.AskUserMessage(
+        content="🌐 **Enter URL to extract content from**\n\nExample: https://docs.mongodb.com/atlas/",
+    ).send()
+
+    if url_msg and url_msg.get("content"):
+        url = url_msg["content"].strip()
+        
+        # Validate URL
+        from urllib.parse import urlparse
+        try:
+            parsed = urlparse(url)
+            if not all([parsed.scheme in ["http", "https"], parsed.netloc]):
+                await cl.Message(content=f"❌ Invalid URL format: {url}").send()
+                return
+        except Exception:
+            await cl.Message(content=f"❌ Invalid URL format: {url}").send()
+            return
+
+        # Show progress
+        progress_msg = cl.Message(content="⏳ **Extracting content from URL...**")
+        await progress_msg.send()
+
+        try:
+            result = await rag.ingest_url(url)
+            
+            if result.success:
+                progress_msg.content = f"""✅ **URL Ingestion Complete**
+
+**Title:** {result.title}
+**Chunks Created:** {result.chunks_created}
+**Source:** {result.source}
+**Processing Time:** {result.processing_time_ms/1000:.2f}s
+
+You can now query this content!"""
+            else:
+                progress_msg.content = f"""❌ **URL Ingestion Failed**
+
+**URL:** {url}
+**Errors:** {', '.join(result.errors)}"""
+            
+            await progress_msg.update()
+        except Exception as e:
+            progress_msg.content = f"❌ **Error ingesting URL:** {str(e)}"
+            await progress_msg.update()
+
+
+@cl.action_callback("crawl_website")
+async def on_crawl_website(action: cl.Action):
+    """Handle website crawl action."""
+    rag = cl.user_session.get("rag")
+    if not rag:
+        await cl.Message(content="❌ RAG system not initialized.").send()
+        return
+
+    # Ask for URL and max pages
+    url_msg = await cl.AskUserMessage(
+        content="🕷️ **Enter website URL to crawl**\n\nExample: https://docs.mongodb.com/atlas/\n\nHow many pages? (default: 10)",
+    ).send()
+
+    if url_msg and url_msg.get("content"):
+        parts = url_msg["content"].strip().split()
+        if not parts:
+            await cl.Message(content="❌ Please provide a URL.").send()
+            return
+
+        url = parts[0]
+        max_pages = 10
+        if len(parts) > 1:
+            try:
+                max_pages = int(parts[1])
+            except ValueError:
+                await cl.Message(content=f"❌ Invalid max_pages: {parts[1]}").send()
+                return
+
+        # Validate URL
+        from urllib.parse import urlparse
+        try:
+            parsed = urlparse(url)
+            if not all([parsed.scheme in ["http", "https"], parsed.netloc]):
+                await cl.Message(content=f"❌ Invalid URL format: {url}").send()
+                return
+        except Exception:
+            await cl.Message(content=f"❌ Invalid URL format: {url}").send()
+            return
+
+        # Show progress
+        progress_msg = cl.Message(content=f"⏳ **Crawling website...**\n\nURL: {url}\nMax pages: {max_pages}")
+        await progress_msg.send()
+
+        try:
+            async def progress_callback(current: int, total: int) -> None:
+                progress_msg.content = f"""⏳ **Crawling website...**
+
+**URL:** {url}
+**Max pages:** {max_pages}
+**Progress:** {current}/{total} pages processed"""
+                await progress_msg.update()
+
+            results = await rag.ingest_website(
+                url, max_pages=max_pages, progress_callback=progress_callback
+            )
+            
+            successful = sum(1 for r in results if r.success)
+            total_chunks = sum(r.chunks_created for r in results)
+            
+            if successful > 0:
+                progress_msg.content = f"""✅ **Website Crawl Complete**
+
+**URL:** {url}
+**Pages Processed:** {successful}/{len(results)}
+**Total Chunks Created:** {total_chunks}
+
+You can now query this content!"""
+            else:
+                progress_msg.content = f"""❌ **Website Crawl Failed**
+
+**URL:** {url}
+**Pages:** 0/{len(results)} successful
+**Errors:** {', '.join(results[0].errors) if results else 'No pages extracted'}"""
+            
+            await progress_msg.update()
+        except Exception as e:
+            progress_msg.content = f"❌ **Error crawling website:** {str(e)}"
+            await progress_msg.update()
+
+
 # ============================================================================
 # Greeting and Meta-Question Detection
 # ============================================================================
@@ -656,13 +791,27 @@ async def handle_command(text: str, rag):
         # Full KB Management Panel with actions
         content, actions = await format_kb_management_panel(rag)
 
-        # Add upload action
+        # Add upload and web ingestion actions
         upload_action = cl.Action(
             name="upload_files",
             payload={},
             label="📤 Upload Files",
             tooltip="Upload new documents to the knowledge base"
         )
+        ingest_url_action = cl.Action(
+            name="ingest_url",
+            payload={},
+            label="🌐 Ingest URL",
+            tooltip="Extract content from a single web URL"
+        )
+        crawl_website_action = cl.Action(
+            name="crawl_website",
+            payload={},
+            label="🕷️ Crawl Website",
+            tooltip="Crawl and ingest multiple pages from a website"
+        )
+        actions.insert(0, crawl_website_action)
+        actions.insert(0, ingest_url_action)
         actions.insert(0, upload_action)
 
         await cl.Message(content=content, actions=actions).send()

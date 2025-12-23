@@ -953,31 +953,31 @@ async def main():
 
     Command-line arguments:
         --dataset, -d: Path to test dataset JSON file (default: sample_dataset.json)
-        --ragendpoint, -r: LightRAG API endpoint URL (default: http://localhost:9621 or $LIGHTRAG_API_URL)
+        --ragendpoint, -r: HybridRAG API endpoint URL (default: http://localhost:9621 or $HYBRIDRAG_API_URL)
 
     Usage:
-        python lightrag/evaluation/eval_rag_quality.py
-        python lightrag/evaluation/eval_rag_quality.py --dataset my_test.json
-        python lightrag/evaluation/eval_rag_quality.py -d my_test.json -r http://localhost:9621
+        python hybridrag/engine/evaluation/eval_rag_quality.py
+        python hybridrag/engine/evaluation/eval_rag_quality.py --dataset my_test.json
+        python hybridrag/engine/evaluation/eval_rag_quality.py -d my_test.json -r http://localhost:9621
     """
     try:
         # Parse command-line arguments
         parser = argparse.ArgumentParser(
-            description="RAGAS Evaluation Script for LightRAG System",
+            description="RAGAS Evaluation Script for HybridRAG System",
             formatter_class=argparse.RawDescriptionHelpFormatter,
             epilog="""
 Examples:
   # Use defaults
-  python lightrag/evaluation/eval_rag_quality.py
+  python hybridrag/engine/evaluation/eval_rag_quality.py
 
   # Specify custom dataset
-  python lightrag/evaluation/eval_rag_quality.py --dataset my_test.json
+  python hybridrag/engine/evaluation/eval_rag_quality.py --dataset my_test.json
 
   # Specify custom RAG endpoint
-  python lightrag/evaluation/eval_rag_quality.py --ragendpoint http://my-server.com:9621
+  python hybridrag/engine/evaluation/eval_rag_quality.py --ragendpoint http://my-server.com:9621
 
   # Specify both
-  python lightrag/evaluation/eval_rag_quality.py -d my_test.json -r http://localhost:9621
+  python hybridrag/engine/evaluation/eval_rag_quality.py -d my_test.json -r http://localhost:9621
             """,
         )
 
@@ -994,13 +994,13 @@ Examples:
             "-r",
             type=str,
             default=None,
-            help="LightRAG API endpoint URL (default: http://localhost:9621 or $LIGHTRAG_API_URL environment variable)",
+            help="HybridRAG API endpoint URL (default: http://localhost:9621 or $HYBRIDRAG_API_URL environment variable)",
         )
 
         args = parser.parse_args()
 
         logger.info("%s", "=" * 70)
-        logger.info("🔍 RAGAS Evaluation - Using Real LightRAG API")
+        logger.info("🔍 RAGAS Evaluation - Using Real HybridRAG API")
         logger.info("%s", "=" * 70)
 
         evaluator = RAGEvaluator(

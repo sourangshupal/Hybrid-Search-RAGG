@@ -65,7 +65,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from .api.auth import auth_handler
 
 # use the .env that is inside the current folder
-# allows to use different .env file for each lightrag instance
+# allows to use different .env file for each hybridrag instance
 # the OS environment variables take precedence over the .env file
 load_dotenv(dotenv_path=".env", override=False)
 
@@ -188,6 +188,7 @@ def check_frontend_build():
         return (False, False)  # Assets don't exist, not outdated
 
     # 2. Check if this is a development environment (source directory exists)
+    # Note: This checks for a webui directory that may not exist in all deployments
     try:
         source_dir = Path(__file__).parent.parent.parent / "lightrag_webui"
         src_dir = source_dir / "src"
@@ -461,8 +462,8 @@ def create_app(args):
         Extract workspace from HTTP request header or use default.
 
         This enables multi-workspace API support by checking the custom
-        'LIGHTRAG-WORKSPACE' header. If not present, falls back to the
-        server's default workspace configuration.
+        'HYBRIDRAG-WORKSPACE' header (or 'WORKSPACE'/'LIGHTRAG-WORKSPACE' for backward compatibility).
+        If not present, falls back to the server's default workspace configuration.
 
         Args:
             request: FastAPI Request object
@@ -470,8 +471,12 @@ def create_app(args):
         Returns:
             Workspace identifier (may be empty string for global namespace)
         """
-        # Check custom header first
-        workspace = request.headers.get("LIGHTRAG-WORKSPACE", "").strip()
+        # Check custom headers with priority: HYBRIDRAG-WORKSPACE > WORKSPACE > LIGHTRAG-WORKSPACE
+        workspace = (
+            request.headers.get("HYBRIDRAG-WORKSPACE")
+            or request.headers.get("WORKSPACE")
+            or request.headers.get("LIGHTRAG-WORKSPACE", "")
+        ).strip()
 
         if not workspace:
             workspace = None
@@ -1043,7 +1048,7 @@ def create_app(args):
 
     # Initialize RAG with unified configuration
     try:
-        rag = LightRAG(
+        rag = RAGEngine(
             working_dir=args.working_dir,
             workspace=args.workspace,
             llm_model_func=create_llm_model_func(args.llm_binding),
@@ -1078,7 +1083,7 @@ def create_app(args):
             ollama_server_infos=ollama_server_infos,
         )
     except Exception as e:
-        logger.error(f"Failed to initialize LightRAG: {e}")
+        logger.error(f"Failed to initialize RAGEngine: {e}")
         raise
 
     # Add routes
@@ -1377,7 +1382,7 @@ def configure_logging():
     log_dir = os.getenv("LOG_DIR", os.getcwd())
     log_file_path = os.path.abspath(os.path.join(log_dir, DEFAULT_LOG_FILENAME))
 
-    print(f"\nLightRAG log file: {log_file_path}\n")
+    print(f"\nHybridRAG log file: {log_file_path}\n")
     os.makedirs(os.path.dirname(log_dir), exist_ok=True)
 
     # Get log file max size and backup count from environment variables

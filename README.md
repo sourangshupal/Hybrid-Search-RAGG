@@ -78,6 +78,7 @@
 │  📈 LANGFUSE TRACING       Production observability built-in            │
 │  🎨 CHAINLIT UI            Beautiful web chat interface                 │
 │  ⚡ VOYAGE AI              State-of-the-art embeddings + reranking      │
+│  🌐 TAVILY INTEGRATION     Web content extraction & crawling            │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -138,6 +139,7 @@ HybridRAG combines multiple retrieval methods:
 - **Python**: 3.11 or higher (3.12 recommended)
 - **MongoDB Atlas**: Free tier account or paid cluster
 - **API Keys**: Voyage AI (required) + at least one LLM provider (Anthropic/OpenAI/Gemini)
+- **Optional**: Tavily API key for web content ingestion
 
 **Note**: No GPU required! All embeddings and LLM inference are handled via API calls.
 
@@ -161,6 +163,7 @@ MONGODB_URI=mongodb+srv://user:pass@cluster.mongodb.net
 MONGODB_DATABASE=hybridrag
 VOYAGE_API_KEY=pa-xxxxxxxxxxxxx
 ANTHROPIC_API_KEY=sk-ant-xxxxxxxxxxxxx
+TAVILY_API_KEY=tvly-xxxxxxxxxxxxx  # Optional: for web ingestion
 EOF
 ```
 
@@ -188,6 +191,10 @@ async def main():
 
     # Ingest documents from folder (uses Docling processor)
     results = await rag.ingest_files("path/to/documents/")
+    
+    # Or ingest web content via Tavily
+    result = await rag.ingest_url("https://docs.mongodb.com/atlas/")
+    results = await rag.ingest_website("https://example.com", max_pages=10)
     
     # Or insert raw text directly
     await rag.insert(["Document 1 content...", "Document 2 content..."])
@@ -224,6 +231,8 @@ hybridrag  # Launch interactive CLI
 
 # Commands:
 # > ingest path/to/file.pdf
+# > ingest-url https://docs.mongodb.com/atlas/
+# > ingest-website https://example.com 10
 # > What is this document about?
 # > /mode mix
 # > /status
@@ -296,8 +305,41 @@ settings = Settings(
 
     # Memory
     memory_max_tokens=32000,  # Self-compaction threshold
+    
+    # Web Ingestion (optional)
+    tavily_api_key="tvly-xxxxxxxxxxxxx",  # For ingest_url() and ingest_website()
 )
 ```
+
+### Web Content Ingestion
+
+HybridRAG supports web content ingestion via [Tavily](https://tavily.com) API:
+
+```python
+# Extract content from a single URL
+result = await rag.ingest_url("https://docs.mongodb.com/atlas/vector-search/")
+
+# Crawl and ingest multiple pages from a website
+results = await rag.ingest_website(
+    "https://docs.mongodb.com/atlas/",
+    max_pages=10,
+    max_depth=2
+)
+
+# Check results
+for r in results:
+    if r.success:
+        print(f"✓ {r.title}: {r.chunks_created} chunks")
+```
+
+**Features:**
+- RAG-optimized markdown content extraction
+- Automatic chunking and knowledge graph extraction
+- Same pipeline as file ingestion
+- CLI commands: `ingest-url` and `ingest-website`
+- UI actions: "🌐 Ingest URL" and "🕷️ Crawl Website" buttons
+
+**Get your Tavily API key:** https://tavily.com
 
 ---
 

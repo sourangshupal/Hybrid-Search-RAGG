@@ -150,6 +150,54 @@ voyage_rerank_instructions=None
 
 **Note:** Instructions follow Voyage AI's hierarchical prioritization patterns. See [Voyage AI documentation](https://www.mongodb.com/developer/products/atlas/instruction-following-reranking/) for best practices.
 
+### Tavily Web Ingestion
+
+HybridRAG supports web content ingestion via Tavily API for extracting content from URLs and crawling websites.
+
+**Configuration:**
+```bash
+# Set Tavily API key (optional)
+TAVILY_API_KEY=your_tavily_api_key
+```
+
+**Usage:**
+```python
+# Single URL extraction
+result = await rag.ingest_url("https://docs.mongodb.com/atlas/vector-search/overview/")
+
+# Website crawling (multiple pages)
+results = await rag.ingest_website(
+    "https://docs.mongodb.com/atlas/vector-search/",
+    max_pages=10,
+    max_depth=2
+)
+```
+
+**Features:**
+- Single URL extraction (Tavily Extract API)
+- Full website crawling (Tavily Crawl API)
+- RAG-optimized markdown content
+- Automatic chunking and knowledge graph extraction
+- Same pipeline as file ingestion (embeddings, KG extraction, storage)
+
+**CLI Usage:**
+```bash
+# Extract single URL
+ingest-url https://docs.mongodb.com/atlas/
+
+# Crawl website (default: 10 pages)
+ingest-website https://docs.mongodb.com/atlas/
+
+# Crawl with custom page limit
+ingest-website https://docs.mongodb.com/atlas/ 5
+```
+
+**UI Usage:**
+- Use "🌐 Ingest URL" action button in the knowledge base management panel
+- Use "🕷️ Crawl Website" action button for multi-page crawling
+
+**Note:** Tavily is an optional dependency. Install with: `pip install tavily-python` or `pip install mongodb-hybridrag[ingestion]`
+
 ### LLM Providers
 
 **Anthropic Claude:**

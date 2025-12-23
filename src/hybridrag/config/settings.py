@@ -67,6 +67,14 @@ class Settings(BaseSettings):
                     "voyage_rerank_instructions is set.",
     )
 
+    # Tavily AI (for web content extraction)
+    tavily_api_key: SecretStr | None = Field(
+        default=None,
+        description="Tavily API key for web content extraction. "
+                    "Optional - enables ingest_url() and ingest_website() functionality. "
+                    "Get your key at https://tavily.com",
+    )
+
     # LLM Provider Selection
     llm_provider: Literal["anthropic", "openai", "gemini"] = Field(
         default="gemini",

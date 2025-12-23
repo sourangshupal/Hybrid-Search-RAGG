@@ -140,6 +140,103 @@ if result.success:
 
 **Returns:** `IngestionResult` object
 
+##### `ingest_url(url: str, config: IngestionConfig | None = None) -> IngestionResult`
+
+Ingest content from a single URL using Tavily Extract API.
+
+**Requires:** `TAVILY_API_KEY` environment variable to be set.
+
+```python
+# Extract content from a single URL
+result = await rag.ingest_url("https://docs.mongodb.com/atlas/vector-search/overview/")
+
+if result.success:
+    print(f"Ingested {result.chunks_created} chunks from {result.title}")
+    print(f"Source: {result.source}")
+else:
+    print(f"Errors: {result.errors}")
+```
+
+**Parameters:**
+- `url` (str): URL to extract content from (must be valid http/https URL)
+- `config` (IngestionConfig | None): Optional ingestion configuration
+
+**Returns:** `IngestionResult` object
+
+**Features:**
+- Uses Tavily Extract API for high-quality content extraction
+- Returns RAG-optimized markdown content
+- Automatically chunks, embeds, and stores content
+- Extracts knowledge graph entities and relationships
+- Logs to Langfuse if enabled
+
+**Error Handling:**
+- Returns `IngestionResult` with errors if:
+  - Tavily API key not configured
+  - Invalid URL format
+  - Rate limit exceeded
+  - Request timeout
+  - Access forbidden
+
+##### `ingest_website(url: str, max_pages: int = 10, max_depth: int = 2, config: IngestionConfig | None = None, progress_callback: Callable[[int, int], None] | None = None) -> list[IngestionResult]`
+
+Ingest content from a website by crawling multiple pages using Tavily Crawl API.
+
+**Requires:** `TAVILY_API_KEY` environment variable to be set.
+
+```python
+# Crawl website (default: 10 pages, depth 2)
+results = await rag.ingest_website("https://docs.mongodb.com/atlas/vector-search/")
+
+# Crawl with custom limits
+results = await rag.ingest_website(
+    "https://docs.mongodb.com/atlas/vector-search/",
+    max_pages=5,
+    max_depth=1,
+)
+
+# With progress callback
+def progress(current: int, total: int) -> None:
+    print(f"Processing page {current}/{total}...")
+
+results = await rag.ingest_website(
+    "https://docs.mongodb.com/atlas/vector-search/",
+    max_pages=10,
+    progress_callback=progress,
+)
+
+# Check results
+successful = sum(1 for r in results if r.success)
+total_chunks = sum(r.chunks_created for r in results)
+print(f"Ingested {successful}/{len(results)} pages, {total_chunks} total chunks")
+```
+
+**Parameters:**
+- `url` (str): Base URL to start crawling from (must be valid http/https URL)
+- `max_pages` (int): Maximum number of pages to crawl (default: 10)
+- `max_depth` (int): Maximum crawl depth (default: 2)
+- `config` (IngestionConfig | None): Optional ingestion configuration
+- `progress_callback` (Callable[[int, int], None] | None): Optional callback for progress updates
+
+**Returns:** List of `IngestionResult` objects, one per crawled page
+
+**Features:**
+- Uses Tavily Crawl API for website crawling
+- Returns RAG-optimized markdown content for each page
+- Automatically chunks, embeds, and stores all pages
+- Extracts knowledge graph entities and relationships
+- Logs to Langfuse if enabled
+- Supports progress tracking via callback
+
+**Error Handling:**
+- Returns list with single `IngestionResult` containing errors if:
+  - Tavily API key not configured
+  - Invalid URL format
+  - Rate limit exceeded
+  - Request timeout
+  - Access forbidden
+  - No pages extracted
+
 ##### `query(query: str, mode: Literal["local", "global", "hybrid", "naive", "mix", "bypass"] | None = None, top_k: int | None = None, rerank_top_k: int | None = None, enable_rerank: bool | None = None, only_context: bool = False, system_prompt: str | None = None) -> str`
 
 Query without conversation memory.

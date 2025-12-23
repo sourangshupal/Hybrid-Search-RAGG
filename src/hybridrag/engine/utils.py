@@ -1645,7 +1645,7 @@ async def aexport_data(
     elif file_format == "md":
         # Markdown export
         with open(output_path, "w", encoding="utf-8") as mdfile:
-            mdfile.write("# LightRAG Data Export\n\n")
+            mdfile.write("# HybridRAG Data Export\n\n")
 
             # Entities
             mdfile.write("## Entities\n\n")
@@ -1707,7 +1707,7 @@ async def aexport_data(
     elif file_format == "txt":
         # Plain text export
         with open(output_path, "w", encoding="utf-8") as txtfile:
-            txtfile.write("LIGHTRAG DATA EXPORT\n")
+            txtfile.write("HYBRIDRAG DATA EXPORT\n")
             txtfile.write("=" * 80 + "\n\n")
 
             # Entities

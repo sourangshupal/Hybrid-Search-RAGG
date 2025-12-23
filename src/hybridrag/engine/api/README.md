@@ -200,7 +200,7 @@ MAX_ASYNC=4
 
 ### Install HybridRAG as a Linux Service
 
-Create your service file `hybridrag.service` from the sample file: `lightrag.service.example`. Modify the start options the service file:
+Create your service file `hybridrag.service` from the sample file: `hybridrag.service.example`. Modify the start options the service file:
 
 ```text
 # Set Enviroment to your Python virtual enviroment

@@ -618,6 +618,593 @@ class HybridRAG:
                     source=str(file_path),
                 )
 
+    async def ingest_url(
+        self,
+        url: str,
+        config: IngestionConfig | None = None,
+    ) -> IngestionResult:
+        """
+        Ingest content from a single URL using Tavily Extract API.
+
+        This method extracts content from a web URL and ingests it into
+        HybridRAG using the same pipeline as file ingestion.
+
+        Args:
+            url: URL to extract content from.
+            config: Optional ingestion configuration.
+
+        Returns:
+            IngestionResult with details of the ingestion.
+
+        Example:
+            ```python
+            rag = HybridRAG()
+            await rag.initialize()
+
+            result = await rag.ingest_url("https://docs.mongodb.com/atlas/")
+            if result.success:
+                print(f"Ingested {result.chunks_created} chunks")
+            ```
+
+        Raises:
+            ValueError: If Tavily API key is not configured or URL is invalid.
+        """
+        self._ensure_initialized()
+
+        logger.info(f"[INGEST_URL] ========== Starting URL Ingestion ==========")
+        logger.info(f"[INGEST_URL] URL: {url}")
+
+        # Check if Tavily API key is configured
+        if not self.settings.tavily_api_key:
+            error_msg = "Tavily API key not configured. Set TAVILY_API_KEY environment variable."
+            logger.error(f"[INGEST_URL] {error_msg}")
+            return IngestionResult(
+                document_id="",
+                title=url,
+                chunks_created=0,
+                processing_time_ms=0,
+                errors=[error_msg],
+                source=url,
+                format_type="web",
+            )
+
+        import time as _time
+        start_time = _time.time()
+
+        try:
+            # Import Tavily processor
+            from ..ingestion.tavily_processor import TavilyProcessor
+            from ..ingestion.tavily_processor import (
+                BadRequestError,
+                ForbiddenError,
+                InvalidAPIKeyError,
+                MissingAPIKeyError,
+                TimeoutError as TavilyTimeoutError,
+                UsageLimitExceededError,
+            )
+
+            # Create Tavily processor
+            processor = TavilyProcessor(
+                api_key=self.settings.tavily_api_key.get_secret_value()
+            )
+
+            # Extract content from URL
+            processed_doc = await processor.extract_url(url)
+
+            # Use existing ingestion pipeline to process the document
+            from motor.motor_asyncio import AsyncIOMotorClient
+
+            client = AsyncIOMotorClient(
+                self.settings.mongodb_uri.get_secret_value()
+            )
+            db = client[self.settings.mongodb_database]
+
+            # Create embedding function wrapper
+            def pipeline_embed_func(texts: list[str]) -> list[list[float]]:
+                from ..integrations.voyage import VoyageEmbedder
+
+                embedder = VoyageEmbedder(
+                    api_key=self.settings.voyage_api_key.get_secret_value(),
+                    embedding_model=self.settings.voyage_embedding_model,
+                    batch_size=64,
+                )
+                result = embedder.embed_sync(texts, input_type="document")
+                return result.tolist() if hasattr(result, "tolist") else list(result)
+
+            # Use default config if not provided
+            if config is None:
+                config = IngestionConfig(
+                    chunking=ChunkingConfig(
+                        max_tokens=512,
+                        chunk_size=1000,
+                        chunk_overlap=200,
+                        tokenizer_model="sentence-transformers/all-MiniLM-L6-v2",
+                    ),
+                    clean_before_ingest=False,
+                    batch_size=self.settings.embedding_batch_size,
+                    enable_audio_transcription=False,  # No audio for web content
+                )
+
+            # Create pipeline and ingest text
+            pipeline = DocumentIngestionPipeline(
+                db=db,
+                embedding_func=pipeline_embed_func,
+                config=config,
+                documents_collection="ingested_documents",
+                chunks_collection="ingested_chunks",
+            )
+
+            result = await pipeline.ingest_text(
+                content=processed_doc.content,
+                title=processed_doc.title,
+                source=processed_doc.source,
+                metadata=processed_doc.metadata,
+            )
+
+            duration = _time.time() - start_time
+
+            # Insert chunks into RAG for KG extraction
+            if result.success:
+                logger.info(
+                    "[INGEST_URL] Inserting chunks into RAG for KG extraction..."
+                )
+                chunks_col = db["ingested_chunks"]
+                cursor = chunks_col.find({"document_id": result.document_id})
+                chunks_data = await cursor.to_list(length=None)
+
+                if chunks_data:
+                    contents = [c["content"] for c in chunks_data]
+                    sources = [
+                        c.get("metadata", {}).get("source", url)
+                        for c in chunks_data
+                    ]
+
+                    await self.insert(documents=contents, file_paths=sources)
+                    logger.info(
+                        f"[INGEST_URL] Inserted {len(contents)} chunks into RAG system"
+                    )
+
+            client.close()
+
+            # Log to Langfuse if enabled
+            if langfuse_enabled():
+                log_ingestion(
+                    file_name=url,
+                    num_chunks=result.chunks_created,
+                    num_entities=0,
+                    num_relations=0,
+                    duration_seconds=duration,
+                    metadata={
+                        "source": "ingest_url",
+                        "url": url,
+                        "api_type": "extract",
+                    },
+                )
+
+            logger.info(f"[INGEST_URL] ========== URL Ingestion Complete ==========")
+            logger.info(
+                f"[INGEST_URL] Success: {result.success}, Chunks: {result.chunks_created}, Duration: {duration:.2f}s"
+            )
+
+            return result
+
+        except MissingAPIKeyError as e:
+            error_msg = f"Tavily API key not configured: {e}"
+            logger.error(f"[INGEST_URL] {error_msg}")
+            return IngestionResult(
+                document_id="",
+                title=url,
+                chunks_created=0,
+                processing_time_ms=(_time.time() - start_time) * 1000,
+                errors=[error_msg],
+                source=url,
+                format_type="web",
+            )
+        except InvalidAPIKeyError as e:
+            error_msg = f"Invalid Tavily API key: {e}"
+            logger.error(f"[INGEST_URL] {error_msg}")
+            return IngestionResult(
+                document_id="",
+                title=url,
+                chunks_created=0,
+                processing_time_ms=(_time.time() - start_time) * 1000,
+                errors=[error_msg],
+                source=url,
+                format_type="web",
+            )
+        except UsageLimitExceededError as e:
+            error_msg = f"Tavily rate limit exceeded: {e}"
+            logger.warning(f"[INGEST_URL] {error_msg}")
+            return IngestionResult(
+                document_id="",
+                title=url,
+                chunks_created=0,
+                processing_time_ms=(_time.time() - start_time) * 1000,
+                errors=[error_msg],
+                source=url,
+                format_type="web",
+            )
+        except BadRequestError as e:
+            error_msg = f"Invalid URL or request: {e}"
+            logger.error(f"[INGEST_URL] {error_msg}")
+            return IngestionResult(
+                document_id="",
+                title=url,
+                chunks_created=0,
+                processing_time_ms=(_time.time() - start_time) * 1000,
+                errors=[error_msg],
+                source=url,
+                format_type="web",
+            )
+        except TavilyTimeoutError as e:
+            error_msg = f"Tavily request timeout: {e}"
+            logger.error(f"[INGEST_URL] {error_msg}")
+            return IngestionResult(
+                document_id="",
+                title=url,
+                chunks_created=0,
+                processing_time_ms=(_time.time() - start_time) * 1000,
+                errors=[error_msg],
+                source=url,
+                format_type="web",
+            )
+        except ForbiddenError as e:
+            error_msg = f"Tavily access forbidden: {e}"
+            logger.error(f"[INGEST_URL] {error_msg}")
+            return IngestionResult(
+                document_id="",
+                title=url,
+                chunks_created=0,
+                processing_time_ms=(_time.time() - start_time) * 1000,
+                errors=[error_msg],
+                source=url,
+                format_type="web",
+            )
+        except Exception as e:
+            error_msg = f"Unexpected error ingesting URL: {e}"
+            logger.exception(f"[INGEST_URL] {error_msg}")
+            return IngestionResult(
+                document_id="",
+                title=url,
+                chunks_created=0,
+                processing_time_ms=(_time.time() - start_time) * 1000,
+                errors=[error_msg],
+                source=url,
+                format_type="web",
+            )
+
+    async def ingest_website(
+        self,
+        url: str,
+        max_pages: int = 10,
+        max_depth: int = 2,
+        config: IngestionConfig | None = None,
+        progress_callback: Callable[[int, int], None] | None = None,
+    ) -> list[IngestionResult]:
+        """
+        Ingest content from a website by crawling multiple pages using Tavily Crawl API.
+
+        This method crawls a website starting from the given URL and ingests
+        all crawled pages into HybridRAG.
+
+        Args:
+            url: Base URL to start crawling from.
+            max_pages: Maximum number of pages to crawl (default: 10).
+            max_depth: Maximum crawl depth (default: 2).
+            config: Optional ingestion configuration.
+            progress_callback: Optional callback for progress updates (current, total).
+
+        Returns:
+            List of IngestionResult objects, one per crawled page.
+
+        Example:
+            ```python
+            rag = HybridRAG()
+            await rag.initialize()
+
+            results = await rag.ingest_website(
+                "https://docs.mongodb.com/atlas/",
+                max_pages=5
+            )
+            successful = sum(1 for r in results if r.success)
+            print(f"Ingested {successful} pages")
+            ```
+
+        Raises:
+            ValueError: If Tavily API key is not configured or URL is invalid.
+        """
+        self._ensure_initialized()
+
+        logger.info(
+            f"[INGEST_WEBSITE] ========== Starting Website Crawl =========="
+        )
+        logger.info(
+            f"[INGEST_WEBSITE] URL: {url}, max_pages={max_pages}, max_depth={max_depth}"
+        )
+
+        # Check if Tavily API key is configured
+        if not self.settings.tavily_api_key:
+            error_msg = "Tavily API key not configured. Set TAVILY_API_KEY environment variable."
+            logger.error(f"[INGEST_WEBSITE] {error_msg}")
+            return [
+                IngestionResult(
+                    document_id="",
+                    title=url,
+                    chunks_created=0,
+                    processing_time_ms=0,
+                    errors=[error_msg],
+                    source=url,
+                    format_type="web",
+                )
+            ]
+
+        import time as _time
+        start_time = _time.time()
+
+        try:
+            # Import Tavily processor
+            from ..ingestion.tavily_processor import TavilyProcessor
+            from ..ingestion.tavily_processor import (
+                BadRequestError,
+                ForbiddenError,
+                InvalidAPIKeyError,
+                MissingAPIKeyError,
+                TimeoutError as TavilyTimeoutError,
+                UsageLimitExceededError,
+            )
+
+            # Create Tavily processor
+            processor = TavilyProcessor(
+                api_key=self.settings.tavily_api_key.get_secret_value()
+            )
+
+            # Crawl website
+            processed_docs = await processor.crawl_website(
+                url=url, max_depth=max_depth, max_pages=max_pages
+            )
+
+            if not processed_docs:
+                error_msg = f"No content extracted from website: {url}"
+                logger.error(f"[INGEST_WEBSITE] {error_msg}")
+                return [
+                    IngestionResult(
+                        document_id="",
+                        title=url,
+                        chunks_created=0,
+                        processing_time_ms=(_time.time() - start_time) * 1000,
+                        errors=[error_msg],
+                        source=url,
+                        format_type="web",
+                    )
+                ]
+
+            logger.info(
+                f"[INGEST_WEBSITE] Extracted {len(processed_docs)} pages, processing..."
+            )
+
+            # Use existing ingestion pipeline to process each document
+            from motor.motor_asyncio import AsyncIOMotorClient
+
+            client = AsyncIOMotorClient(
+                self.settings.mongodb_uri.get_secret_value()
+            )
+            db = client[self.settings.mongodb_database]
+
+            # Create embedding function wrapper
+            def pipeline_embed_func(texts: list[str]) -> list[list[float]]:
+                from ..integrations.voyage import VoyageEmbedder
+
+                embedder = VoyageEmbedder(
+                    api_key=self.settings.voyage_api_key.get_secret_value(),
+                    embedding_model=self.settings.voyage_embedding_model,
+                    batch_size=64,
+                )
+                result = embedder.embed_sync(texts, input_type="document")
+                return result.tolist() if hasattr(result, "tolist") else list(result)
+
+            # Use default config if not provided
+            if config is None:
+                config = IngestionConfig(
+                    chunking=ChunkingConfig(
+                        max_tokens=512,
+                        chunk_size=1000,
+                        chunk_overlap=200,
+                        tokenizer_model="sentence-transformers/all-MiniLM-L6-v2",
+                    ),
+                    clean_before_ingest=False,
+                    batch_size=self.settings.embedding_batch_size,
+                    enable_audio_transcription=False,  # No audio for web content
+                )
+
+            # Create pipeline
+            pipeline = DocumentIngestionPipeline(
+                db=db,
+                embedding_func=pipeline_embed_func,
+                config=config,
+                documents_collection="ingested_documents",
+                chunks_collection="ingested_chunks",
+            )
+
+            # Process each page
+            results = []
+            all_chunks_data = []
+
+            for i, processed_doc in enumerate(processed_docs):
+                if progress_callback:
+                    progress_callback(i + 1, len(processed_docs))
+
+                result = await pipeline.ingest_text(
+                    content=processed_doc.content,
+                    title=processed_doc.title,
+                    source=processed_doc.source,
+                    metadata=processed_doc.metadata,
+                )
+                results.append(result)
+
+                # Collect chunks for RAG insertion
+                if result.success:
+                    chunks_col = db["ingested_chunks"]
+                    cursor = chunks_col.find({"document_id": result.document_id})
+                    chunks_data = await cursor.to_list(length=None)
+                    all_chunks_data.extend(chunks_data)
+
+            duration = _time.time() - start_time
+
+            # Insert all chunks into RAG for KG extraction
+            if all_chunks_data:
+                logger.info(
+                    "[INGEST_WEBSITE] Inserting chunks into RAG for KG extraction..."
+                )
+                contents = [c["content"] for c in all_chunks_data]
+                sources = [
+                    c.get("metadata", {}).get("source", url)
+                    for c in all_chunks_data
+                ]
+
+                await self.insert(documents=contents, file_paths=sources)
+                logger.info(
+                    f"[INGEST_WEBSITE] Inserted {len(contents)} chunks into RAG system"
+                )
+
+            client.close()
+
+            # Summary statistics
+            total_docs = len(results)
+            successful = sum(1 for r in results if r.success)
+            total_chunks = sum(r.chunks_created for r in results)
+            total_errors = sum(len(r.errors) for r in results)
+
+            logger.info(
+                f"[INGEST_WEBSITE] ========== Website Crawl Complete =========="
+            )
+            logger.info(
+                f"[INGEST_WEBSITE] Pages: {successful}/{total_docs} successful"
+            )
+            logger.info(f"[INGEST_WEBSITE] Total chunks: {total_chunks}")
+            logger.info(f"[INGEST_WEBSITE] Duration: {duration:.2f}s")
+            if total_errors > 0:
+                logger.warning(f"[INGEST_WEBSITE] Errors: {total_errors}")
+
+            # Log to Langfuse if enabled
+            if langfuse_enabled():
+                log_ingestion(
+                    file_name=url,
+                    num_chunks=total_chunks,
+                    num_entities=0,
+                    num_relations=0,
+                    duration_seconds=duration,
+                    metadata={
+                        "source": "ingest_website",
+                        "url": url,
+                        "api_type": "crawl",
+                        "total_pages": total_docs,
+                        "successful_pages": successful,
+                        "max_pages": max_pages,
+                        "max_depth": max_depth,
+                    },
+                )
+
+            return results
+
+        except MissingAPIKeyError as e:
+            error_msg = f"Tavily API key not configured: {e}"
+            logger.error(f"[INGEST_WEBSITE] {error_msg}")
+            return [
+                IngestionResult(
+                    document_id="",
+                    title=url,
+                    chunks_created=0,
+                    processing_time_ms=(_time.time() - start_time) * 1000,
+                    errors=[error_msg],
+                    source=url,
+                    format_type="web",
+                )
+            ]
+        except InvalidAPIKeyError as e:
+            error_msg = f"Invalid Tavily API key: {e}"
+            logger.error(f"[INGEST_WEBSITE] {error_msg}")
+            return [
+                IngestionResult(
+                    document_id="",
+                    title=url,
+                    chunks_created=0,
+                    processing_time_ms=(_time.time() - start_time) * 1000,
+                    errors=[error_msg],
+                    source=url,
+                    format_type="web",
+                )
+            ]
+        except UsageLimitExceededError as e:
+            error_msg = f"Tavily rate limit exceeded: {e}"
+            logger.warning(f"[INGEST_WEBSITE] {error_msg}")
+            return [
+                IngestionResult(
+                    document_id="",
+                    title=url,
+                    chunks_created=0,
+                    processing_time_ms=(_time.time() - start_time) * 1000,
+                    errors=[error_msg],
+                    source=url,
+                    format_type="web",
+                )
+            ]
+        except BadRequestError as e:
+            error_msg = f"Invalid URL or request: {e}"
+            logger.error(f"[INGEST_WEBSITE] {error_msg}")
+            return [
+                IngestionResult(
+                    document_id="",
+                    title=url,
+                    chunks_created=0,
+                    processing_time_ms=(_time.time() - start_time) * 1000,
+                    errors=[error_msg],
+                    source=url,
+                    format_type="web",
+                )
+            ]
+        except TavilyTimeoutError as e:
+            error_msg = f"Tavily request timeout: {e}"
+            logger.error(f"[INGEST_WEBSITE] {error_msg}")
+            return [
+                IngestionResult(
+                    document_id="",
+                    title=url,
+                    chunks_created=0,
+                    processing_time_ms=(_time.time() - start_time) * 1000,
+                    errors=[error_msg],
+                    source=url,
+                    format_type="web",
+                )
+            ]
+        except ForbiddenError as e:
+            error_msg = f"Tavily access forbidden: {e}"
+            logger.error(f"[INGEST_WEBSITE] {error_msg}")
+            return [
+                IngestionResult(
+                    document_id="",
+                    title=url,
+                    chunks_created=0,
+                    processing_time_ms=(_time.time() - start_time) * 1000,
+                    errors=[error_msg],
+                    source=url,
+                    format_type="web",
+                )
+            ]
+        except Exception as e:
+            error_msg = f"Unexpected error ingesting website: {e}"
+            logger.exception(f"[INGEST_WEBSITE] {error_msg}")
+            return [
+                IngestionResult(
+                    document_id="",
+                    title=url,
+                    chunks_created=0,
+                    processing_time_ms=(_time.time() - start_time) * 1000,
+                    errors=[error_msg],
+                    source=url,
+                    format_type="web",
+                )
+            ]
+
     async def query(
         self,
         query: str,

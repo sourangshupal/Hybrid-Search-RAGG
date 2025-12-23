@@ -445,3 +445,4 @@ HybridRAG stores all state in MongoDB, so backups cover:
 - [Configuration Guide](configuration.md) - Configure settings
 - [API Reference](api.md) - Use the Python SDK
 
+

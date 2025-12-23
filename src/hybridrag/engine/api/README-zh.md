@@ -16,10 +16,10 @@ HybridRAG 服务器旨在提供 Web 界面和 API 支持。Web 界面便于文�
 
 ```bash
 # 使用 uv (推荐)
-uv pip install "lightrag-hku[api]"
+uv pip install "hybridrag[api]"
 
 # 或使用 pip
-# pip install "lightrag-hku[api]"
+# pip install "hybridrag[api]"
 ```
 
 * 从源代码安装
@@ -192,7 +192,7 @@ MAX_ASYNC=4
 
 ### 将 HybridRAG 安装为 Linux 服务
 
-从示例文件 `lightrag.service.example` 创建您的服务文件 `hybridrag.service`。修改服务文件中的服务启动定义：
+从示例文件 `hybridrag.service.example` 创建您的服务文件 `hybridrag.service`。修改服务文件中的服务启动定义：
 
 ```text
 # Set Enviroment to your Python virtual enviroment

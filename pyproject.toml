@@ -81,6 +81,7 @@ ingestion = [
     "docling>=2.0.0",
     "docling-core>=2.0.0",
     "transformers>=4.30.0",
+    "tavily-python>=0.3.0",  # Tavily web scraping
 ]
 observability = [
     "langfuse>=2.0.0",

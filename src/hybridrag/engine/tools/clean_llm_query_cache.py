@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
-LLM Query Cache Cleanup Tool for LightRAG
+LLM Query Cache Cleanup Tool for HybridRAG
 
 This tool cleans up LLM query cache (mix:*, hybrid:*, local:*, global:*)
 from KV storage implementations while preserving workspace isolation.
 
 Usage:
-    python -m lightrag.tools.clean_llm_query_cache
+    python -m hybridrag.engine.tools.clean_llm_query_cache
     # or
-    python lightrag/tools/clean_llm_query_cache.py
+    python hybridrag/engine/tools/clean_llm_query_cache.py
 
 Supported KV Storage Types:
     - JsonKVStorage
@@ -689,7 +689,7 @@ class CleanupTool:
     def print_header(self):
         """Print tool header"""
         print("\n" + "=" * 60)
-        print("LLM Query Cache Cleanup Tool - LightRAG")
+        print("LLM Query Cache Cleanup Tool - HybridRAG")
         print("=" * 60)
 
     def print_storage_types(self):
@@ -883,18 +883,18 @@ class CleanupTool:
             print("\nJsonKVStorage is an in-memory database that does NOT support")
             print("concurrent access to the same file by multiple programs.")
             print("\nBefore proceeding, please ensure that:")
-            print("  • LightRAG Server is completely shut down")
+            print("  • HybridRAG Server is completely shut down")
             print("  • No other programs are accessing the storage files")
             print("\n" + "=" * 60)
 
             confirm = (
-                input("\nHas LightRAG Server been shut down? (yes/no): ")
+                input("\nHas HybridRAG Server been shut down? (yes/no): ")
                 .strip()
                 .lower()
             )
             if confirm != "yes":
                 print(
-                    "\n✓ Operation cancelled - Please shut down LightRAG Server first"
+                    "\n✓ Operation cancelled - Please shut down HybridRAG Server first"
                 )
                 return None, None, None
 
@@ -935,11 +935,11 @@ class CleanupTool:
                 print("     port = 5432")
                 print("     user = postgres")
                 print("     password = yourpassword")
-                print("     database = lightrag")
+                print("     database = hybridrag")
             elif storage_name == "MongoKVStorage":
                 print("     [mongodb]")
                 print("     uri = mongodb://root:root@localhost:27017/")
-                print("     database = LightRAG")
+                print("     database = HybridRAG")
 
             return None, None, None
 

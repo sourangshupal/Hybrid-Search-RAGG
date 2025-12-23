@@ -38,8 +38,8 @@
 
 1. **启动程序**:
    ```bash
-   pip install lightrag-hku[tools]
-   lightrag-viewer
+   pip install hybridrag[tools]
+   hybridrag-viewer
    ```
 
 2. **加载字体**:

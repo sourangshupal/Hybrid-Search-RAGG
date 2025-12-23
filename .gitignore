@@ -58,6 +58,16 @@ lightrag-fork/
 run_chat_simulation.py
 ingest_langsam.py
 chat_simulation_results.json
+test_tavily_integration.py
+test_real_apis.py
+test_instructions_reranking.py
+test_quick_real.py
+test_real_life.py
+test_queries_simple.py
+test_unknown_content.py
+REAL_LIFE_TEST_GUIDE.md
+production_readiness_report.json
+QUERY_RESULTS_ANALYSIS.md
 
 # Internal development (keep locally, exclude from repo)
 .claude/

@@ -265,6 +265,160 @@ async def conversation_loop(rag: HybridRAG) -> None:
                         print(f"Error ingesting: {e}")
                 continue
 
+            # Ingest URL command: ingest-url <url>
+            if command.startswith("ingest-url "):
+                url = user_input[11:].strip()
+                if not url:
+                    if RICH_AVAILABLE:
+                        console.print("[red]Usage: ingest-url <url>[/red]")
+                    else:
+                        print("Usage: ingest-url <url>")
+                    continue
+
+                # Validate URL format
+                from urllib.parse import urlparse
+
+                try:
+                    parsed = urlparse(url)
+                    if not all([parsed.scheme in ["http", "https"], parsed.netloc]):
+                        if RICH_AVAILABLE:
+                            console.print(f"[red]Invalid URL format: {url}[/red]")
+                        else:
+                            print(f"Invalid URL format: {url}")
+                        continue
+                except Exception:
+                    if RICH_AVAILABLE:
+                        console.print(f"[red]Invalid URL format: {url}[/red]")
+                    else:
+                        print(f"Invalid URL format: {url}")
+                    continue
+
+                try:
+                    if RICH_AVAILABLE:
+                        with console.status(
+                            f"[bold green]Ingesting URL {url}...[/bold green]"
+                        ):
+                            result = await rag.ingest_url(url)
+                            if result.success:
+                                console.print(
+                                    f"[green]Successfully ingested: {result.title}[/green]"
+                                )
+                                console.print(
+                                    f"[green]Chunks created: {result.chunks_created}[/green]"
+                                )
+                            else:
+                                console.print(
+                                    f"[red]Failed to ingest: {result.errors}[/red]"
+                                )
+                    else:
+                        print(f"Ingesting URL {url}...")
+                        result = await rag.ingest_url(url)
+                        if result.success:
+                            print(f"Successfully ingested: {result.title}")
+                            print(f"Chunks created: {result.chunks_created}")
+                        else:
+                            print(f"Failed to ingest: {result.errors}")
+                except Exception as e:
+                    if RICH_AVAILABLE:
+                        console.print(f"[red]Error ingesting URL: {e}[/red]")
+                    else:
+                        print(f"Error ingesting URL: {e}")
+                continue
+
+            # Ingest website command: ingest-website <url> [max_pages]
+            if command.startswith("ingest-website "):
+                parts = user_input[15:].strip().split()
+                if not parts:
+                    if RICH_AVAILABLE:
+                        console.print(
+                            "[red]Usage: ingest-website <url> [max_pages][/red]"
+                        )
+                    else:
+                        print("Usage: ingest-website <url> [max_pages]")
+                    continue
+
+                url = parts[0]
+                max_pages = 10
+                if len(parts) > 1:
+                    try:
+                        max_pages = int(parts[1])
+                    except ValueError:
+                        if RICH_AVAILABLE:
+                            console.print(
+                                f"[red]Invalid max_pages: {parts[1]}[/red]"
+                            )
+                        else:
+                            print(f"Invalid max_pages: {parts[1]}")
+                        continue
+
+                # Validate URL format
+                from urllib.parse import urlparse
+
+                try:
+                    parsed = urlparse(url)
+                    if not all([parsed.scheme in ["http", "https"], parsed.netloc]):
+                        if RICH_AVAILABLE:
+                            console.print(f"[red]Invalid URL format: {url}[/red]")
+                        else:
+                            print(f"Invalid URL format: {url}")
+                        continue
+                except Exception:
+                    if RICH_AVAILABLE:
+                        console.print(f"[red]Invalid URL format: {url}[/red]")
+                    else:
+                        print(f"Invalid URL format: {url}")
+                    continue
+
+                try:
+                    def progress_callback(current: int, total: int) -> None:
+                        if RICH_AVAILABLE:
+                            console.print(
+                                f"[yellow]Processing page {current}/{total}...[/yellow]"
+                            )
+                        else:
+                            print(f"Processing page {current}/{total}...")
+
+                    if RICH_AVAILABLE:
+                        with console.status(
+                            f"[bold green]Crawling website {url}...[/bold green]"
+                        ):
+                            results = await rag.ingest_website(
+                                url, max_pages=max_pages, progress_callback=progress_callback
+                            )
+                            successful = sum(1 for r in results if r.success)
+                            total_chunks = sum(r.chunks_created for r in results)
+                            console.print(
+                                f"[green]Successfully ingested {successful}/{len(results)} pages[/green]"
+                            )
+                            console.print(
+                                f"[green]Total chunks created: {total_chunks}[/green]"
+                            )
+                            if successful < len(results):
+                                failed = [
+                                    r.title for r in results if not r.success
+                                ]
+                                console.print(
+                                    f"[yellow]Failed pages: {failed}[/yellow]"
+                                )
+                    else:
+                        print(f"Crawling website {url}...")
+                        results = await rag.ingest_website(
+                            url, max_pages=max_pages, progress_callback=progress_callback
+                        )
+                        successful = sum(1 for r in results if r.success)
+                        total_chunks = sum(r.chunks_created for r in results)
+                        print(f"Successfully ingested {successful}/{len(results)} pages")
+                        print(f"Total chunks created: {total_chunks}")
+                        if successful < len(results):
+                            failed = [r.title for r in results if not r.success]
+                            print(f"Failed pages: {failed}")
+                except Exception as e:
+                    if RICH_AVAILABLE:
+                        console.print(f"[red]Error ingesting website: {e}[/red]")
+                    else:
+                        print(f"Error ingesting website: {e}")
+                continue
+
             # Process the query
             if RICH_AVAILABLE:
                 with console.status("[bold blue]Thinking...[/bold blue]"):

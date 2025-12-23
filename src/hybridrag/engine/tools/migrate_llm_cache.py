@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
-LLM Cache Migration Tool for LightRAG
+LLM Cache Migration Tool for HybridRAG
 
 This tool migrates LLM response cache (default:extract:* and default:summary:*)
 between different KV storage implementations while preserving workspace isolation.
 
 Usage:
-    python -m lightrag.tools.migrate_llm_cache
+    python -m hybridrag.engine.tools.migrate_llm_cache
     # or
-    python lightrag/tools/migrate_llm_cache.py
+    python hybridrag/engine/tools/migrate_llm_cache.py
 
 Supported KV Storage Types:
     - JsonKVStorage
@@ -36,7 +36,7 @@ from .utils import setup_logger
 
 # Load environment variables
 # use the .env that is inside the current folder
-# allows to use different .env file for each lightrag instance
+# allows to use different .env file for each hybridrag instance
 # the OS environment variables take precedence over the .env file
 load_dotenv(dotenv_path=".env", override=False)
 
@@ -887,7 +887,7 @@ class MigrationTool:
     def print_header(self):
         """Print tool header"""
         print("\n" + "=" * 50)
-        print("LLM Cache Migration Tool - LightRAG")
+        print("LLM Cache Migration Tool - HybridRAG")
         print("=" * 50)
 
     def print_storage_types(self):
@@ -1057,11 +1057,11 @@ class MigrationTool:
                 print("     port = 5432")
                 print("     user = postgres")
                 print("     password = yourpassword")
-                print("     database = lightrag")
+                print("     database = hybridrag")
             elif storage_name == "MongoKVStorage":
                 print("     [mongodb]")
                 print("     uri = mongodb://root:root@localhost:27017/")
-                print("     database = LightRAG")
+                print("     database = HybridRAG")
 
             return None, None, None, 0
 

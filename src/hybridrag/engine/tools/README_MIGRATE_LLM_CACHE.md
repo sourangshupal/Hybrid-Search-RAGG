@@ -2,7 +2,7 @@
 
 ## Overview
 
-This tool migrates LightRAG's LLM response cache between different KV storage implementations. It specifically migrates caches generated during file extraction (mode `default`), including entity extraction and summary caches.
+This tool migrates HybridRAG's LLM response cache between different KV storage implementations. It specifically migrates caches generated during file extraction (mode `default`), including entity extraction and summary caches.
 
 ## Supported Storage Types
 
@@ -21,18 +21,18 @@ The tool migrates the following cache types:
 
 ## Prerequisites
 
-The LLM Cache Migration Tool reads the storage configuration of the LightRAG Server and provides an LLM migration option to select source and destination storage. Ensure that both the source and destination storage have been correctly configured and are accessible via the LightRAG Server before cache migration.
+The LLM Cache Migration Tool reads the storage configuration of the HybridRAG Server and provides an LLM migration option to select source and destination storage. Ensure that both the source and destination storage have been correctly configured and are accessible via the HybridRAG Server before cache migration.
 
 ## Usage
 
 ### Basic Usage
 
-Run from the LightRAG project root directory:
+Run from the HybridRAG project root directory:
 
 ```bash
-python -m lightrag.tools.migrate_llm_cache
+python -m hybridrag.engine.tools.migrate_llm_cache
 # or
-python lightrag/tools/migrate_llm_cache.py
+python hybridrag/engine/tools/migrate_llm_cache.py
 ```
 
 ### Interactive Workflow
@@ -337,7 +337,7 @@ POSTGRES_DATABASE=your_database
 
 ```bash
 MONGO_URI=mongodb://root:root@localhost:27017/
-MONGO_DATABASE=LightRAG
+MONGO_DATABASE=HybridRAG
 ```
 
 #### Option B: config.ini Configuration
@@ -353,7 +353,7 @@ host = localhost
 port = 5432
 user = postgres
 password = yourpassword
-database = lightrag
+database = hybridrag
 
 [mongodb]
 uri = mongodb://root:root@localhost:27017/
@@ -394,10 +394,10 @@ Use case: Migrating from single-machine development to production
 # 1. Configure environment variables
 WORKSPACE=production
 MONGO_URI=mongodb://user:pass@prod-server:27017/
-MONGO_DATABASE=LightRAG
+MONGO_DATABASE=HybridRAG
 
 # 2. Run tool
-python -m lightrag.tools.migrate_llm_cache
+python -m hybridrag.engine.tools.migrate_llm_cache
 
 # 3. Select: 1 (JsonKVStorage) -> 1 (MongoKVStorage - renumbered from 4)
 ```
@@ -415,7 +415,7 @@ POSTGRES_HOST=new-postgres-server
 # ... Other PostgreSQL configs
 
 # 2. Run tool
-python -m lightrag.tools.migrate_llm_cache
+python -m hybridrag.engine.tools.migrate_llm_cache
 
 # 3. Select: 2 (RedisKVStorage) -> 2 (PGKVStorage - renumbered from 3)
 ```
@@ -432,7 +432,7 @@ POSTGRES_WORKSPACE=dev_workspace  # For development environment
 MONGODB_WORKSPACE=prod_workspace  # For production environment
 
 # Run tool
-python -m lightrag.tools.migrate_llm_cache
+python -m hybridrag.engine.tools.migrate_llm_cache
 
 # Select: 3 (PGKVStorage with dev_workspace) -> 3 (MongoKVStorage with prod_workspace)
 ```

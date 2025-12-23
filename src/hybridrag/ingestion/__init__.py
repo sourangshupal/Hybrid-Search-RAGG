@@ -18,6 +18,16 @@ from .chunker import DoclingHybridChunker, create_chunker
 from .document_processor import DocumentProcessor
 from .pipeline import DocumentIngestionPipeline
 
+# Tavily processor (optional dependency)
+try:
+    from .tavily_processor import TavilyProcessor, create_tavily_processor
+
+    TAVILY_AVAILABLE = True
+except ImportError:
+    TAVILY_AVAILABLE = False
+    TavilyProcessor = None  # type: ignore
+    create_tavily_processor = None  # type: ignore
+
 __all__ = [
     # Types
     "DocumentChunk",
@@ -32,4 +42,7 @@ __all__ = [
     "DocumentProcessor",
     # Pipeline
     "DocumentIngestionPipeline",
+    # Tavily (optional)
+    "TavilyProcessor",
+    "create_tavily_processor",
 ]

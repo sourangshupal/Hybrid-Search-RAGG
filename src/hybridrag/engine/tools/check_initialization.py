@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
 """
-Diagnostic tool to check LightRAG initialization status.
+Diagnostic tool to check HybridRAG initialization status.
 
-This tool helps developers verify that their LightRAG instance is properly
+This tool helps developers verify that their HybridRAG instance is properly
 initialized and ready to use. It should be called AFTER initialize_storages()
 to validate that all components are correctly set up.
 
 Usage:
     # Basic usage in your code:
-    rag = LightRAG(...)
+    rag = BaseRAGEngine(...)
     await rag.initialize_storages()
     await check_lightrag_setup(rag, verbose=True)
 
     # Run demo from command line:
-    python -m lightrag.tools.check_initialization --demo
+    python -m hybridrag.engine.tools.check_initialization --demo
 """
 
 import asyncio
@@ -29,10 +29,10 @@ from .base import StoragesStatus
 
 async def check_lightrag_setup(rag_instance: BaseRAGEngine, verbose: bool = False) -> bool:
     """
-    Check if a LightRAG instance is properly initialized.
+    Check if a HybridRAG instance is properly initialized.
 
     Args:
-        rag_instance: The LightRAG instance to check
+        rag_instance: The HybridRAG instance to check
         verbose: If True, print detailed diagnostic information
 
     Returns:
@@ -41,11 +41,11 @@ async def check_lightrag_setup(rag_instance: BaseRAGEngine, verbose: bool = Fals
     issues = []
     warnings = []
 
-    print("🔍 Checking LightRAG initialization status...\n")
+    print("🔍 Checking HybridRAG initialization status...\n")
 
     # Check storage initialization status
     if not hasattr(rag_instance, "_storages_status"):
-        issues.append("LightRAG instance missing _storages_status attribute")
+        issues.append("HybridRAG instance missing _storages_status attribute")
     elif rag_instance._storages_status != StoragesStatus.INITIALIZED:
         issues.append(
             f"Storages not initialized (status: {rag_instance._storages_status.name})"
@@ -119,7 +119,7 @@ async def check_lightrag_setup(rag_instance: BaseRAGEngine, verbose: bool = Fals
 
         return False
     else:
-        print("✅ LightRAG is properly initialized and ready to use!")
+        print("✅ HybridRAG is properly initialized and ready to use!")
 
         if warnings and verbose:
             print("\n⚠️  Warnings (might be normal):")
@@ -134,7 +134,7 @@ async def demo():
     from .llm.openai import openai_embed, gpt_4o_mini_complete
 
     print("=" * 50)
-    print("LightRAG Initialization Diagnostic Tool")
+    print("HybridRAG Initialization Diagnostic Tool")
     print("=" * 50)
 
     # Create test instance
@@ -159,7 +159,7 @@ async def demo():
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="Check LightRAG initialization status")
+    parser = argparse.ArgumentParser(description="Check HybridRAG initialization status")
     parser.add_argument(
         "--demo", action="store_true", help="Run a demonstration with a test instance"
     )

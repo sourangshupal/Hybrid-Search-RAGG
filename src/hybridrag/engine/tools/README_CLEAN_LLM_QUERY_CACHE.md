@@ -2,7 +2,7 @@
 
 ## Overview
 
-This tool cleans up LightRAG's LLM query cache from KV storage implementations. It specifically targets query caches generated during RAG query operations (modes: `mix`, `hybrid`, `local`, `global`), including both query and keywords caches.
+This tool cleans up HybridRAG's LLM query cache from KV storage implementations. It specifically targets query caches generated during RAG query operations (modes: `mix`, `hybrid`, `local`, `global`), including both query and keywords caches.
 
 ## Supported Storage Types
 
@@ -48,12 +48,12 @@ Examples:
 
 ### Basic Usage
 
-Run from the LightRAG project root directory:
+Run from the HybridRAG project root directory:
 
 ```bash
-python -m lightrag.tools.clean_llm_query_cache
+python -m hybridrag.engine.tools.clean_llm_query_cache
 # or
-python lightrag/tools/clean_llm_query_cache.py
+python hybridrag/engine/tools/clean_llm_query_cache.py
 ```
 
 ### Interactive Workflow
@@ -63,7 +63,7 @@ The tool guides you through the following steps:
 #### 1. Select Storage Type
 ```
 ============================================================
-LLM Query Cache Cleanup Tool - LightRAG
+LLM Query Cache Cleanup Tool - HybridRAG
 ============================================================
 
 === Storage Setup ===
@@ -456,7 +456,7 @@ POSTGRES_DATABASE=your_database
 
 ```bash
 MONGO_URI=mongodb://root:root@localhost:27017/
-MONGO_DATABASE=LightRAG
+MONGO_DATABASE=HybridRAG
 ```
 
 ### config.ini Configuration
@@ -472,7 +472,7 @@ host = localhost
 port = 5432
 user = postgres
 password = yourpassword
-database = lightrag
+database = hybridrag
 
 [mongodb]
 uri = mongodb://root:root@localhost:27017/
@@ -527,7 +527,7 @@ database = LightRAG
 
 ```bash
 # Run tool
-python -m lightrag.tools.clean_llm_query_cache
+python -m hybridrag.engine.tools.clean_llm_query_cache
 
 # Select: Storage type -> Option 1 (all) -> Confirm (y)
 ```
@@ -540,7 +540,7 @@ python -m lightrag.tools.clean_llm_query_cache
 
 ```bash
 # Run tool
-python -m lightrag.tools.clean_llm_query_cache
+python -m hybridrag.engine.tools.clean_llm_query_cache
 
 # Select: Storage type -> Option 2 (query only) -> Confirm (y)
 ```
@@ -553,7 +553,7 @@ python -m lightrag.tools.clean_llm_query_cache
 
 ```bash
 # Run tool
-python -m lightrag.tools.clean_llm_query_cache
+python -m hybridrag.engine.tools.clean_llm_query_cache
 
 # Select: Storage type -> Option 3 (keywords only) -> Confirm (y)
 ```
@@ -569,7 +569,7 @@ python -m lightrag.tools.clean_llm_query_cache
 export WORKSPACE=development
 
 # Run tool
-python -m lightrag.tools.clean_llm_query_cache
+python -m hybridrag.engine.tools.clean_llm_query_cache
 
 # Select: Storage type -> Cleanup option -> Confirm (y)
 ```

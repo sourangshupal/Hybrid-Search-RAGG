@@ -40,10 +40,10 @@ def download_tiktoken_cache(cache_dir: str = None, models: list = None):
         )
         print(f"Using default cache directory: {cache_dir}")
 
-    # Common models used by LightRAG and OpenAI
+    # Common models used by HybridRAG and OpenAI
     if models is None:
         models = [
-            "gpt-4o-mini",  # Default model for LightRAG
+            "gpt-4o-mini",  # Default model for HybridRAG
             "gpt-4o",  # GPT-4 Omni
             "gpt-4",  # GPT-4
             "gpt-3.5-turbo",  # GPT-3.5 Turbo
@@ -102,19 +102,19 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(
-        prog="lightrag-download-cache",
-        description="Download cache files for LightRAG offline deployment",
+        prog="hybridrag-download-cache",
+        description="Download cache files for HybridRAG offline deployment",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
   # Download to default location (~/.tiktoken_cache)
-  lightrag-download-cache
+  hybridrag-download-cache
 
   # Download to specific directory
-  lightrag-download-cache --cache-dir ./offline_cache/tiktoken
+  hybridrag-download-cache --cache-dir ./offline_cache/tiktoken
 
   # Download specific models only
-  lightrag-download-cache --models gpt-4o-mini gpt-4
+  hybridrag-download-cache --models gpt-4o-mini gpt-4
 
 For more information, visit: https://github.com/HKUDS/LightRAG
         """,
@@ -132,13 +132,13 @@ For more information, visit: https://github.com/HKUDS/LightRAG
         default=None,
     )
     parser.add_argument(
-        "--version", action="version", version="%(prog)s (LightRAG cache downloader)"
+        "--version", action="version", version="%(prog)s (HybridRAG cache downloader)"
     )
 
     args = parser.parse_args()
 
     print("=" * 70)
-    print("LightRAG Offline Cache Downloader")
+    print("HybridRAG Offline Cache Downloader")
     print("=" * 70)
 
     try:

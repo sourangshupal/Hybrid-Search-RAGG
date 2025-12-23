@@ -1190,12 +1190,12 @@ def _extract_xlsx(file_bytes: bytes) -> str:
 
 
 async def pipeline_enqueue_file(
-    rag: LightRAG, file_path: Path, track_id: str = None
+    rag: RAGEngine, file_path: Path, track_id: str = None
 ) -> tuple[bool, str]:
     """Add a file to the queue for processing
 
     Args:
-        rag: LightRAG instance
+        rag: RAGEngine instance
         file_path: Path to the saved file
         track_id: Optional tracking ID, if not provided will be generated
     Returns:
@@ -1643,11 +1643,11 @@ async def pipeline_enqueue_file(
                 logger.error(f"Error deleting file {file_path}: {str(e)}")
 
 
-async def pipeline_index_file(rag: LightRAG, file_path: Path, track_id: str = None):
+async def pipeline_index_file(rag: RAGEngine, file_path: Path, track_id: str = None):
     """Index a file with track_id
 
     Args:
-        rag: LightRAG instance
+        rag: RAGEngine instance
         file_path: Path to the saved file
         track_id: Optional tracking ID
     """
@@ -1664,12 +1664,12 @@ async def pipeline_index_file(rag: LightRAG, file_path: Path, track_id: str = No
 
 
 async def pipeline_index_files(
-    rag: LightRAG, file_paths: List[Path], track_id: str = None
+    rag: RAGEngine, file_paths: List[Path], track_id: str = None
 ):
     """Index multiple files sequentially to avoid high CPU load
 
     Args:
-        rag: LightRAG instance
+        rag: RAGEngine instance
         file_paths: Paths to the files to index
         track_id: Optional tracking ID to pass to all files
     """
@@ -1698,7 +1698,7 @@ async def pipeline_index_files(
 
 
 async def pipeline_index_texts(
-    rag: LightRAG,
+    rag: RAGEngine,
     texts: List[str],
     file_sources: List[str] = None,
     track_id: str = None,
@@ -1706,7 +1706,7 @@ async def pipeline_index_texts(
     """Index a list of texts with track_id
 
     Args:
-        rag: LightRAG instance
+        rag: RAGEngine instance
         texts: The texts to index
         file_sources: Sources of the texts
         track_id: Optional tracking ID
@@ -1726,12 +1726,12 @@ async def pipeline_index_texts(
 
 
 async def run_scanning_process(
-    rag: LightRAG, doc_manager: DocumentManager, track_id: str = None
+    rag: RAGEngine, doc_manager: DocumentManager, track_id: str = None
 ):
     """Background task to scan and index documents
 
     Args:
-        rag: LightRAG instance
+        rag: RAGEngine instance
         doc_manager: DocumentManager instance
         track_id: Optional tracking ID to pass to all scanned files
     """
@@ -1785,7 +1785,7 @@ async def run_scanning_process(
 
 
 async def background_delete_documents(
-    rag: LightRAG,
+    rag: RAGEngine,
     doc_manager: DocumentManager,
     doc_ids: List[str],
     delete_file: bool = False,
@@ -2035,7 +2035,7 @@ async def background_delete_documents(
 
 
 def create_document_routes(
-    rag: LightRAG, doc_manager: DocumentManager, api_key: Optional[str] = None
+    rag: RAGEngine, doc_manager: DocumentManager, api_key: Optional[str] = None
 ):
     # Create combined auth dependency for document routes
     combined_auth = get_combined_auth_dependency(api_key)

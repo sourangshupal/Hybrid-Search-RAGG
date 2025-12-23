@@ -28,13 +28,13 @@ def direct_log(message, enable_output: bool = True, level: str = "DEBUG"):
     if not enable_output:
         return
 
-    # Get the current logger level from the lightrag logger
+    # Get the current logger level from the hybridrag logger
     try:
         from ..utils import logger
 
         current_level = logger.getEffectiveLevel()
     except ImportError:
-        # Fallback if lightrag.utils is not available
+        # Fallback if hybridrag.utils is not available
         current_level = 20  # INFO
 
     # Convert string level to numeric level for comparison

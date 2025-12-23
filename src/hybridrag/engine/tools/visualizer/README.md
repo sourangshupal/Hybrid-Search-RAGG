@@ -1,6 +1,6 @@
-# LightRAG 3D Graph Viewer
+# HybridRAG 3D Graph Viewer
 
-An interactive 3D graph visualization tool included in the LightRAG package for visualizing and analyzing RAG (Retrieval-Augmented Generation) graphs and other graph structures.
+An interactive 3D graph visualization tool included in the HybridRAG package for visualizing and analyzing RAG (Retrieval-Augmented Generation) graphs and other graph structures.
 
 ![image](https://github.com/user-attachments/assets/b0d86184-99fc-468c-96ed-c611f14292bf)
 
@@ -8,9 +8,9 @@ An interactive 3D graph visualization tool included in the LightRAG package for 
 
 ### Quick Install
 ```bash
-pip install lightrag-hku[tools]  # Install with visualization tool only
+pip install hybridrag[tools]  # Install with visualization tool only
 # or
-pip install lightrag-hku[api,tools]  # Install with both API and visualization tools
+pip install hybridrag[api,tools]  # Install with both API and visualization tools
 ```
 
 ## Launch the Viewer
@@ -92,10 +92,10 @@ Adjustable via UI control panel:
 1. **Command Not Found**
    ```bash
    # Make sure you installed with the 'tools' option
-   pip install lightrag-hku[tools]
+   pip install hybridrag[tools]
 
    # Verify installation
-   pip list | grep lightrag-hku
+   pip list | grep hybridrag
    ```
 
 2. **ModernGL Initialization Failed**
@@ -110,7 +110,7 @@ Adjustable via UI control panel:
    - The required fonts are included in the package
    - If issues persist, check your graphics drivers
 
-## Usage with LightRAG
+## Usage with HybridRAG
 
 The viewer is particularly useful for:
 - Visualizing RAG knowledge graphs
@@ -126,11 +126,11 @@ The viewer is particularly useful for:
 
 ## Support
 
-- GitHub Issues: [LightRAG Repository](https://github.com/HKUDS/LightRAG)
-- Documentation: [LightRAG Docs](https://URL-to-docs)
+- GitHub Issues: [HybridRAG Repository](https://github.com/HKUDS/LightRAG)
+- Documentation: [HybridRAG Docs](https://URL-to-docs)
 
 ## License
 
-This tool is part of LightRAG and is distributed under the MIT License. See `LICENSE` for more information.
+This tool is part of HybridRAG and is distributed under the MIT License. See `LICENSE` for more information.
 
-Note: This visualization tool is an optional component of the LightRAG package. Install with the [tools] option to access the viewer functionality.
+Note: This visualization tool is an optional component of the HybridRAG package. Install with the [tools] option to access the viewer functionality.

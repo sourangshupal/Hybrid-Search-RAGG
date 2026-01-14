@@ -141,7 +141,7 @@ MongoDB Community Edition includes native full-text search and vector search cap
 
 For production use:
 1. Create an account at [MongoDB Atlas](https://www.mongodb.com/atlas)
-2. Create an **M2+ cluster** (M0 free tier not recommended - see [Issue #2](https://github.com/romiluz13/Hybrid-Search-RAG/issues/2))
+2. Create an **M10+ cluster** (M0 free tier not recommended - see [Issue #2](https://github.com/romiluz13/Hybrid-Search-RAG/issues/2))
 3. Create a database user
 4. Whitelist your IP address (or use `0.0.0.0/0` for development)
 5. Get your connection string and add it to `.env`
@@ -241,7 +241,7 @@ Then open `http://localhost:8000` in your browser.
 - **Solution**: Install UI dependencies: `pip install -e ".[ui]"`
 
 **Issue**: MongoDB Atlas M0 "maximum number of FTS indexes reached" error
-- **Solution**: Atlas M0 free tier has a 3-index limit that prevents full hybrid search. Switch to MongoDB Community Edition for unlimited indexes on a free stack, or upgrade to Atlas M2+ for production use. See [Issue #2](https://github.com/romiluz13/Hybrid-Search-RAG/issues/2) for details.
+- **Solution**: Atlas M0 free tier has a 3-index limit that prevents full hybrid search. Switch to MongoDB Community Edition for unlimited indexes on a free stack, or upgrade to Atlas M10+ for production use. See [Issue #2](https://github.com/romiluz13/Hybrid-Search-RAG/issues/2) for details.
 
 ### Getting Help
 

@@ -201,7 +201,7 @@ MAX_CONCURRENT_REQUESTS=10
 ### 1. Create Production Cluster
 
 1. Log into MongoDB Atlas
-2. Create M2+ cluster (M0 free tier has 3-index limit - use MongoDB Community Edition for free tier instead)
+2. Create M10+ cluster (M0 free tier has 3-index limit - use MongoDB Community Edition for free tier instead)
 3. Configure backup and monitoring
 
 ### 2. Configure Network Access

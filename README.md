@@ -137,7 +137,7 @@ HybridRAG combines multiple retrieval methods:
 
 **Software:**
 - **Python**: 3.11 or higher (3.12 recommended)
-- **MongoDB**: MongoDB Community Edition (recommended for free tier) or MongoDB Atlas M2+ (for production)
+- **MongoDB**: MongoDB Community Edition (recommended for free tier) or MongoDB Atlas M10+ (for production)
   - **Note**: Atlas M0 free tier has a 3-index limit that prevents full hybrid search - use Community Edition for unlimited indexes
 - **API Keys**: Voyage AI (required) + at least one LLM provider (Anthropic/OpenAI/Gemini)
 - **Optional**: Tavily API key for web content ingestion

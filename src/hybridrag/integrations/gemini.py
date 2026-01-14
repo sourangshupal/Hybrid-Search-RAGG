@@ -17,6 +17,17 @@ import numpy as np
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
+import pipmaster as pm
+
+# Install the Google Gemini client and its dependencies on demand
+if not pm.is_installed("google-genai"):
+    pm.install("google-genai")
+if not pm.is_installed("google-api-core"):
+    pm.install("google-api-core")
+
+from google import genai  # type: ignore
+from google.genai import types  # type: ignore
+
 logger = logging.getLogger("hybridrag.gemini")
 logger.setLevel(logging.INFO)
 
@@ -34,7 +45,6 @@ class GeminiLLM:
     max_tokens: int = 4096
 
     def __post_init__(self) -> None:
-        from google import genai
         self._client = genai.Client(api_key=self.api_key)
 
     async def generate_async(
@@ -90,8 +100,8 @@ class GeminiEmbedder:
     batch_size: int = 100
 
     def __post_init__(self) -> None:
-        import google.generativeai as genai
-        genai.configure(api_key=self.api_key)
+        # Client will be created lazily in embed_async to ensure async context
+        self._client = None
 
     @property
     def embedding_dim(self) -> int:
@@ -103,7 +113,7 @@ class GeminiEmbedder:
         texts: Sequence[str],
     ) -> np.ndarray:
         """
-        Embed texts asynchronously.
+        Embed texts asynchronously using google-genai SDK.
 
         Args:
             texts: List of texts to embed
@@ -111,33 +121,57 @@ class GeminiEmbedder:
         Returns:
             Numpy array of embeddings
         """
-        import google.generativeai as genai
-        import asyncio
-
         if not texts:
             return np.array([], dtype=np.float32)
 
-        all_embeddings: list[list[float]] = []
-        loop = asyncio.get_event_loop()
+        # Create client lazily (reuse if exists)
+        if self._client is None:
+            self._client = genai.Client(api_key=self.api_key)
 
+        all_embeddings: list[list[float]] = []
+
+        # Process in batches
         for i in range(0, len(texts), self.batch_size):
             batch = list(texts[i : i + self.batch_size])
 
-            # Gemini embed_content is sync, wrap for async
-            result = await loop.run_in_executor(
-                None,
-                lambda b=batch: genai.embed_content(
-                    model=f"models/{self.model}",
-                    content=b,
-                    task_type="retrieval_document",
-                ),
-            )
+            try:
+                # Use async API directly (no executor needed)
+                response = await self._client.aio.models.embed_content(
+                    model=self.model,
+                    contents=batch,
+                    config=types.EmbedContentConfig(
+                        task_type="RETRIEVAL_DOCUMENT"
+                    ),
+                )
 
-            # Handle single vs batch response
-            if isinstance(result["embedding"][0], list):
-                all_embeddings.extend(result["embedding"])
-            else:
-                all_embeddings.append(result["embedding"])
+                # Extract embeddings from response
+                if not response.embeddings:
+                    raise RuntimeError("Gemini response did not contain embeddings.")
+
+                for embedding in response.embeddings:
+                    if not embedding.values:
+                        raise ValueError("Empty embedding values returned")
+                    all_embeddings.append(list(embedding.values))
+
+            except Exception as e:
+                logger.error(f"[EMBED] Batch embedding failed: {e}")
+                # Fallback to individual processing
+                for item in batch:
+                    try:
+                        response = await self._client.aio.models.embed_content(
+                            model=self.model,
+                            contents=[item],
+                            config=types.EmbedContentConfig(
+                                task_type="RETRIEVAL_DOCUMENT"
+                            ),
+                        )
+                        if response.embeddings and response.embeddings[0].values:
+                            all_embeddings.append(list(response.embeddings[0].values))
+                        else:
+                            raise ValueError("No embeddings returned")
+                    except Exception as individual_error:
+                        logger.error(f"[EMBED] Individual embedding failed: {individual_error}")
+                        raise
 
         return np.array(all_embeddings, dtype=np.float32)
 

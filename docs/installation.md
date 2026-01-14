@@ -29,7 +29,7 @@ Complete guide to installing and setting up HybridRAG.
   - macOS 10.15+ (Catalina or later)
   - Linux (Ubuntu 20.04+, Debian 11+, or similar)
   - Windows 10/11 (with WSL2 recommended)
-- **MongoDB Atlas**: Free tier account (or paid cluster)
+- **MongoDB**: MongoDB Community Edition (recommended for free tier) or MongoDB Atlas (M2+ for production)
 - **API Keys**: 
   - Voyage AI API key (required)
   - At least one LLM provider key (Anthropic, OpenAI, or Google Gemini)
@@ -124,17 +124,31 @@ LANGFUSE_HOST=https://cloud.langfuse.com
 EOF
 ```
 
-### 2. Set Up MongoDB Atlas
+### 2. Set Up MongoDB
 
-1. Create a free account at [MongoDB Atlas](https://www.mongodb.com/atlas)
-2. Create a new cluster (free tier M0 is sufficient for testing)
+**Option A: MongoDB Community Edition (Recommended for Free Tier)**
+
+MongoDB Community Edition includes native full-text search and vector search capabilities without index limitations:
+
+1. Download and install [MongoDB Community Edition](https://www.mongodb.com/try/download/community) (7.0+)
+2. Start MongoDB: `mongod --dbpath /path/to/data`
+3. Create a database user (optional for local development)
+4. Use connection string: `mongodb://localhost:27017` (or `mongodb://localhost:27017/hybridrag`)
+
+**Option B: MongoDB Atlas (For Production)**
+
+**Important**: Atlas M0 free tier has a **3 search/vector index limit** which prevents full hybrid search. For free tier users, use MongoDB Community Edition instead.
+
+For production use:
+1. Create an account at [MongoDB Atlas](https://www.mongodb.com/atlas)
+2. Create an **M2+ cluster** (M0 free tier not recommended - see [Issue #2](https://github.com/romiluz13/Hybrid-Search-RAG/issues/2))
 3. Create a database user
 4. Whitelist your IP address (or use `0.0.0.0/0` for development)
 5. Get your connection string and add it to `.env`
 
-**Important**: Enable Vector Search in your Atlas cluster:
-- Go to Atlas Search → Create Search Index
-- Create a vector search index on your collection
+**Important**: Enable Vector Search:
+- **Community Edition**: Vector search is enabled by default in 7.0+
+- **Atlas**: Go to Atlas Search → Create Search Index → Create a vector search index on your collection
 
 ### 3. Get API Keys
 
@@ -225,6 +239,9 @@ Then open `http://localhost:8000` in your browser.
 
 **Issue**: Chainlit UI not starting
 - **Solution**: Install UI dependencies: `pip install -e ".[ui]"`
+
+**Issue**: MongoDB Atlas M0 "maximum number of FTS indexes reached" error
+- **Solution**: Atlas M0 free tier has a 3-index limit that prevents full hybrid search. Switch to MongoDB Community Edition for unlimited indexes on a free stack, or upgrade to Atlas M2+ for production use. See [Issue #2](https://github.com/romiluz13/Hybrid-Search-RAG/issues/2) for details.
 
 ### Getting Help
 

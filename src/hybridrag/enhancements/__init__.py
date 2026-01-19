@@ -17,10 +17,14 @@ from .filters import (
 )
 from .implicit_expansion import ImplicitExpander
 from .mongodb_hybrid_search import (
+    DEFAULT_RRF_CONSTANT,
+    NUM_CANDIDATES_MULTIPLIER,
     MongoDBHybridSearchConfig,
     MongoDBHybridSearcher,
     SearchResult,
+    calculate_num_candidates,
     create_hybrid_searcher,
+    extract_pipeline_score,
     hybrid_search_with_rank_fusion,
     hybrid_search_with_score_fusion,
     manual_hybrid_search_with_rrf,
@@ -53,6 +57,11 @@ __all__ = [
     # Utilities
     "reciprocal_rank_fusion",
     "SearchResult",
+    "calculate_num_candidates",
+    "extract_pipeline_score",
+    # Constants
+    "DEFAULT_RRF_CONSTANT",
+    "NUM_CANDIDATES_MULTIPLIER",
     # Filter builders
     "build_vector_search_filters",
     "build_atlas_search_filters",

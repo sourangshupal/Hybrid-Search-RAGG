@@ -40,6 +40,55 @@ logger.setLevel(logging.INFO)
 # Default RRF constant (MongoDB default is 60, but configurable)
 DEFAULT_RRF_CONSTANT = 60
 
+# numCandidates multiplier (per MongoDB best practices: 10-20x limit)
+# Reference: coleam00 recommendations, ai-agents-meetup patterns
+NUM_CANDIDATES_MULTIPLIER = 20
+
+
+def calculate_num_candidates(
+    top_k: int, multiplier: int = NUM_CANDIDATES_MULTIPLIER
+) -> int:
+    """
+    Calculate numCandidates dynamically based on requested limit.
+
+    Per MongoDB best practices (coleam00, official docs):
+    numCandidates should be 10-20x the limit for good recall.
+
+    Args:
+        top_k: Number of results requested
+        multiplier: Multiplier for top_k (default: 20)
+
+    Returns:
+        numCandidates value for vector search
+    """
+    return top_k * multiplier
+
+
+def extract_pipeline_score(
+    score_details: dict[str, Any] | None, pipeline_name: str
+) -> float:
+    """
+    Extract per-pipeline score from scoreDetails.
+
+    Reference: JohnGUnderwood/atlas-hybrid-search, ai-agents-meetup
+
+    Args:
+        score_details: The scoreDetails object from $rankFusion
+        pipeline_name: Name of the pipeline ("vector" or "text")
+
+    Returns:
+        The score value for that pipeline, or 0.0 if not found
+    """
+    if not score_details or "details" not in score_details:
+        return 0.0
+
+    details = score_details.get("details", [])
+    for detail in details:
+        if detail.get("inputPipelineName") == pipeline_name:
+            return detail.get("value", 0.0)
+
+    return 0.0
+
 
 class SearchResult(BaseModel):
     """
@@ -67,6 +116,15 @@ class SearchResult(BaseModel):
     search_type: str = Field(
         default="unknown", description="Type of search that produced this result"
     )
+    # Per-pipeline scores from $rankFusion scoreDetails
+    source_scores: dict[str, float] = Field(
+        default_factory=dict,
+        description="Per-pipeline scores: {vector: float, text: float}",
+    )
+    # Raw scoreDetails from $rankFusion (for debugging)
+    score_details: dict[str, Any] | None = Field(
+        default=None, description="Raw scoreDetails from $rankFusion"
+    )
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for backward compatibility."""
@@ -80,7 +138,9 @@ class MongoDBHybridSearchConfig:
     # Vector search settings
     vector_index_name: str = "vector_knn_index"
     vector_path: str = "vector"
-    vector_num_candidates: int = 100
+    # DEPRECATED: Use NUM_CANDIDATES_MULTIPLIER * top_k instead (dynamic)
+    # Only used as fallback if explicit numCandidates not provided
+    vector_num_candidates: int | None = None  # None = use dynamic calculation
 
     # Full-text search settings
     text_index_name: str = "text_search_index"
@@ -221,12 +281,19 @@ async def hybrid_search_with_rank_fusion(
         f"text_filtered={atlas_filter_config is not None}"
     )
 
+    # Calculate dynamic numCandidates (MongoDB best practice: 10-20x limit)
+    num_candidates = (
+        config.vector_num_candidates
+        if config.vector_num_candidates is not None
+        else calculate_num_candidates(top_k)
+    )
+
     # Build vector search stage
     vector_search_stage: dict[str, Any] = {
         "index": config.vector_index_name,
         "path": config.vector_path,
         "queryVector": query_vector,
-        "numCandidates": config.vector_num_candidates,
+        "numCandidates": num_candidates,
         "limit": top_k * 2,
     }
 
@@ -261,6 +328,7 @@ async def hybrid_search_with_rank_fusion(
             compound_query["filter"] = atlas_filters
 
     # Build the hybrid search pipeline using $rankFusion
+    # Reference: JohnGUnderwood/atlas-hybrid-search, ai-agents-meetup patterns
     pipeline = [
         {
             "$rankFusion": {
@@ -278,10 +346,26 @@ async def hybrid_search_with_rank_fusion(
                         ],
                     }
                 },
-                "combination": {"rrf": {}},
+                # Explicit weights (configurable) instead of default RRF
+                # Reference: MongoDB $rankFusion docs (combination.weights)
+                "combination": {
+                    "weights": {
+                        "vector": config.vector_weight,
+                        "text": config.text_weight,
+                    }
+                },
+                # CRITICAL: Always enable scoreDetails for per-pipeline debugging
+                # Reference: mongodb/docs, JohnGUnderwood/atlas-hybrid-search
+                "scoreDetails": True,
             }
         },
-        {"$addFields": {"hybrid_score": {"$meta": "rankFusionScore"}}},
+        # Extract both the RRF score and scoreDetails for per-pipeline analysis
+        {
+            "$addFields": {
+                "hybrid_score": {"$meta": "rankFusionScore"},
+                "score_details": {"$meta": "scoreDetails"},
+            }
+        },
         {"$limit": top_k},
         {"$project": {"vector": 0}},
     ]
@@ -292,9 +376,11 @@ async def hybrid_search_with_rank_fusion(
 
         logger.info(f"[HYBRID_SEARCH] $rankFusion returned {len(results)} results")
 
-        # Format results
+        # Format results with per-pipeline scores
+        # Reference: ai-agents-meetup/src/lib/search/index.ts
         formatted_results = []
         for doc in results:
+            score_details = doc.get("score_details")
             formatted_results.append(
                 {
                     **doc,
@@ -305,12 +391,24 @@ async def hybrid_search_with_rank_fusion(
                         if (vector_filter_config or atlas_filter_config)
                         else "hybrid_rrf"
                     ),
+                    # Per-pipeline scores for debugging/analysis
+                    "source_scores": {
+                        "vector": extract_pipeline_score(score_details, "vector"),
+                        "text": extract_pipeline_score(score_details, "text"),
+                    },
+                    "score_details": score_details,
                 }
             )
 
         if formatted_results:
-            top_score = formatted_results[0].get("score", 0)
-            logger.info(f"[HYBRID_SEARCH] Top result score: {top_score:.4f}")
+            top_result = formatted_results[0]
+            top_score = top_result.get("score", 0)
+            source_scores = top_result.get("source_scores", {})
+            logger.info(
+                f"[HYBRID_SEARCH] Top result score: {top_score:.4f} "
+                f"(vector: {source_scores.get('vector', 0):.4f}, "
+                f"text: {source_scores.get('text', 0):.4f})"
+            )
 
         return formatted_results
 
@@ -355,6 +453,13 @@ async def hybrid_search_with_score_fusion(
     if config is None:
         config = MongoDBHybridSearchConfig()
 
+    # Calculate dynamic numCandidates (MongoDB best practice: 10-20x limit)
+    num_candidates = (
+        config.vector_num_candidates
+        if config.vector_num_candidates is not None
+        else calculate_num_candidates(top_k)
+    )
+
     logger.info(
         f"[HYBRID_SEARCH] Starting $scoreFusion search: "
         f"weights=[vector:{config.vector_weight}, text:{config.text_weight}]"
@@ -373,7 +478,7 @@ async def hybrid_search_with_score_fusion(
                                     "index": config.vector_index_name,
                                     "path": config.vector_path,
                                     "queryVector": query_vector,
-                                    "numCandidates": config.vector_num_candidates,
+                                    "numCandidates": num_candidates,
                                     "limit": top_k * 2,
                                 }
                             }
@@ -1015,12 +1120,19 @@ async def vector_only_search(
     if config is None:
         config = MongoDBHybridSearchConfig()
 
+    # Calculate dynamic numCandidates (MongoDB best practice: 10-20x limit)
+    num_candidates = (
+        config.vector_num_candidates
+        if config.vector_num_candidates is not None
+        else calculate_num_candidates(top_k)
+    )
+
     # Build $vectorSearch stage
     vector_search_stage: dict[str, Any] = {
         "index": config.vector_index_name,
         "path": config.vector_path,
         "queryVector": query_vector,
-        "numCandidates": config.vector_num_candidates,
+        "numCandidates": num_candidates,
         "limit": top_k,
     }
 

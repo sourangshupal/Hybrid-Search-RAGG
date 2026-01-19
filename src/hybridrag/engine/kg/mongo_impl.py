@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING, Any, final
 import numpy as np
 
 if TYPE_CHECKING:
+    from datetime import datetime
+
     from hybridrag.enhancements.filters import VectorSearchFilterConfig
 from pymongo import (
     AsyncMongoClient,  # type: ignore
@@ -2270,6 +2272,117 @@ class MongoVectorDBStorage(BaseVectorStorage):
             }
             for doc in results
         ]
+
+    async def query_with_filters(
+        self,
+        query_vector: list[float],
+        top_k: int = 10,
+        start_date: "datetime | None" = None,
+        end_date: "datetime | None" = None,
+        timestamp_field: str = "created_at",
+        equality_filters: dict[str, Any] | None = None,
+        in_filters: dict[str, list[Any]] | None = None,
+    ) -> list[dict[str, Any]]:
+        """
+        Perform vector search with prefiltering but NO text search required.
+
+        This is the "Lexical Free Filter" capability - apply filters
+        without needing to provide a text query for Atlas Search.
+
+        Uses MongoDB 8.0+ $vectorSearch prefiltering with standard operators.
+
+        Args:
+            query_vector: Query embedding vector
+            top_k: Number of results to return
+            start_date: Optional start date for date range filter
+            end_date: Optional end date for date range filter
+            timestamp_field: Field name for timestamp (default: "created_at")
+            equality_filters: Dict of {field: value} for exact matches
+            in_filters: Dict of {field: [values]} for in-list matches
+
+        Returns:
+            List of matching documents with vector similarity scores
+
+        Example:
+            # Find similar documents from last 30 days by specific author
+            results = await storage.query_with_filters(
+                query_vector=embedding,
+                top_k=20,
+                start_date=datetime.now() - timedelta(days=30),
+                equality_filters={"author": "John Doe"},
+            )
+        """
+        from hybridrag.enhancements.filters import (
+            VectorSearchFilterConfig,
+            build_vector_search_filters,
+        )
+
+        # Build filter config
+        config = VectorSearchFilterConfig(
+            start_date=start_date,
+            end_date=end_date,
+            timestamp_field=timestamp_field,
+            equality_filters=equality_filters or {},
+            in_filters=in_filters or {},
+        )
+
+        # Build filters
+        filters = build_vector_search_filters(config)
+
+        # Convert query_vector if needed
+        if hasattr(query_vector, "tolist"):
+            query_vector = query_vector.tolist()
+        else:
+            query_vector = list(query_vector)
+
+        # Build pipeline with prefiltering
+        vector_search_stage: dict[str, Any] = {
+            "index": self._index_name,
+            "path": "vector",
+            "queryVector": query_vector,
+            "numCandidates": max(100, top_k * 10),
+            "limit": top_k,
+        }
+
+        if filters:
+            vector_search_stage["filter"] = filters
+            logger.info(
+                f"[VECTOR_FILTER] Applying prefilters: "
+                f"date_range={bool(start_date or end_date)}, "
+                f"equality={len(equality_filters or {})}, "
+                f"in_list={len(in_filters or {})}"
+            )
+
+        pipeline = [
+            {"$vectorSearch": vector_search_stage},
+            {"$addFields": {"score": {"$meta": "vectorSearchScore"}}},
+            {"$match": {"score": {"$gte": self.cosine_better_than_threshold}}},
+            {"$project": {"vector": 0}},
+        ]
+
+        try:
+            cursor = await self._data.aggregate(pipeline, allowDiskUse=True)
+            results = await cursor.to_list(length=None)
+
+            logger.info(
+                f"[VECTOR_FILTER] Returned {len(results)} results with prefiltering"
+            )
+
+            return [
+                {
+                    **doc,
+                    "id": doc.get("_id"),
+                    "score": doc.get("score"),
+                    "search_type": "vector_prefiltered",
+                }
+                for doc in results
+            ]
+
+        except Exception as e:
+            logger.error(f"[VECTOR_FILTER] Prefiltered search failed: {e}")
+            # Fallback to unfiltered vector search
+            logger.warning("[VECTOR_FILTER] Falling back to unfiltered vector search")
+            return await self.query("", top_k, query_embedding=query_vector)
 
     async def index_done_callback(self) -> None:
         # Mongo handles persistence automatically

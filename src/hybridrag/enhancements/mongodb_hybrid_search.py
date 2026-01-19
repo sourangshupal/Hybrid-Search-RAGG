@@ -169,16 +169,22 @@ async def hybrid_search_with_rank_fusion(
     query_vector: list[float],
     top_k: int = 10,
     config: MongoDBHybridSearchConfig | None = None,
+    vector_filter_config: "VectorSearchFilterConfig | None" = None,
+    atlas_filter_config: "AtlasSearchFilterConfig | None" = None,
 ) -> list[dict[str, Any]]:
     """
     Perform hybrid search using MongoDB's $rankFusion.
 
     This combines:
-    1. Vector similarity search ($vectorSearch)
-    2. Full-text keyword search ($search)
+    1. Vector similarity search ($vectorSearch) with optional prefiltering
+    2. Full-text keyword search ($search) with optional Atlas Search filters
+
+    CRITICAL: Vector and Atlas use DIFFERENT filter syntaxes!
+    - Vector: Standard MongoDB operators ($gte, $lte, $eq)
+    - Atlas: Atlas Search operators (range, equals)
 
     Using Reciprocal Rank Fusion (RRF) formula:
-    score = Σ (1 / (60 + rank_i))
+    score = sum(1 / (60 + rank_i))
 
     Args:
         collection: MongoDB collection with both vector and text indexes
@@ -186,6 +192,8 @@ async def hybrid_search_with_rank_fusion(
         query_vector: The query embedding vector
         top_k: Number of results to return
         config: Hybrid search configuration
+        vector_filter_config: Filters for vector search (standard MongoDB operators)
+        atlas_filter_config: Filters for Atlas Search (Atlas-specific operators)
 
     Returns:
         List of documents with fused relevance scores
@@ -195,52 +203,73 @@ async def hybrid_search_with_rank_fusion(
 
     logger.info(
         f"[HYBRID_SEARCH] Starting $rankFusion search: "
-        f"query='{query_text[:50]}...', top_k={top_k}"
+        f"query='{query_text[:50]}...', top_k={top_k}, "
+        f"vector_filtered={vector_filter_config is not None}, "
+        f"text_filtered={atlas_filter_config is not None}"
     )
 
+    # Build vector search stage
+    vector_search_stage: dict[str, Any] = {
+        "index": config.vector_index_name,
+        "path": config.vector_path,
+        "queryVector": query_vector,
+        "numCandidates": config.vector_num_candidates,
+        "limit": top_k * 2,
+    }
+
+    # Add vector prefilters if provided
+    if vector_filter_config:
+        from hybridrag.enhancements.filters import build_vector_search_filters
+        vector_filters = build_vector_search_filters(vector_filter_config)
+        if vector_filters:
+            vector_search_stage["filter"] = vector_filters
+
+    # Build text search stage with compound query
+    text_clause: dict[str, Any] = {
+        "text": {
+            "query": query_text,
+            "path": config.text_search_path,
+            "fuzzy": {
+                "maxEdits": config.fuzzy_max_edits,
+                "prefixLength": config.fuzzy_prefix_length,
+            },
+        }
+    }
+
+    compound_query: dict[str, Any] = {"must": [text_clause]}
+
+    # Add Atlas Search filters if provided
+    if atlas_filter_config:
+        from hybridrag.enhancements.filters import build_atlas_search_filters
+        atlas_filters = build_atlas_search_filters(atlas_filter_config)
+        if atlas_filters:
+            compound_query["filter"] = atlas_filters
+
     # Build the hybrid search pipeline using $rankFusion
-    # $rankFusion accepts an array of input pipelines
     pipeline = [
         {
             "$rankFusion": {
                 "input": {
                     "pipelines": {
-                        # Pipeline 1: Vector similarity search
                         "vector": [
-                            {
-                                "$vectorSearch": {
-                                    "index": config.vector_index_name,
-                                    "path": config.vector_path,
-                                    "queryVector": query_vector,
-                                    "numCandidates": config.vector_num_candidates,
-                                    "limit": top_k
-                                    * 2,  # Get more candidates for fusion
-                                }
-                            }
+                            {"$vectorSearch": vector_search_stage}
                         ],
-                        # Pipeline 2: Full-text search
                         "text": [
                             {
                                 "$search": {
                                     "index": config.text_index_name,
-                                    "text": {
-                                        "query": query_text,
-                                        "path": config.text_search_path,
-                                    },
+                                    "compound": compound_query,
                                 }
                             },
                             {"$limit": top_k * 2},
                         ],
                     }
                 },
-                "combination": {"rrf": {}},  # Reciprocal Rank Fusion - must be object
+                "combination": {"rrf": {}},
             }
         },
-        # Add fusion score to results
         {"$addFields": {"hybrid_score": {"$meta": "rankFusionScore"}}},
-        # Limit final results
         {"$limit": top_k},
-        # Project out the vector field to reduce response size
         {"$project": {"vector": 0}},
     ]
 
@@ -258,7 +287,7 @@ async def hybrid_search_with_rank_fusion(
                     **doc,
                     "id": doc.get("_id"),
                     "score": doc.get("hybrid_score"),
-                    "search_type": "hybrid_rrf",
+                    "search_type": "hybrid_rrf_filtered" if (vector_filter_config or atlas_filter_config) else "hybrid_rrf",
                 }
             )
 

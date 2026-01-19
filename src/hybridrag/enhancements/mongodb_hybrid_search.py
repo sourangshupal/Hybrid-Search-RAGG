@@ -31,6 +31,7 @@ if TYPE_CHECKING:
 
     from hybridrag.enhancements.filters import (
         AtlasSearchFilterConfig,
+        VectorSearchFilterConfig,
     )
 
 logger = logging.getLogger("hybridrag.mongodb_hybrid")
@@ -769,9 +770,12 @@ async def vector_only_search(
     top_k: int = 10,
     config: MongoDBHybridSearchConfig | None = None,
     db: AsyncDatabase | None = None,
+    filter_config: "VectorSearchFilterConfig | None" = None,
 ) -> list[SearchResult]:
     """
     Perform semantic vector search using MongoDB Atlas Vector Search.
+
+    Supports MongoDB 8.0+ prefiltering with standard MongoDB operators.
 
     Args:
         collection: MongoDB collection with vector search index
@@ -779,6 +783,7 @@ async def vector_only_search(
         top_k: Number of results to return
         config: Search configuration
         db: Database instance for $lookup (optional)
+        filter_config: Vector search filter configuration (optional)
 
     Returns:
         List of SearchResult objects ordered by vector similarity
@@ -786,17 +791,26 @@ async def vector_only_search(
     if config is None:
         config = MongoDBHybridSearchConfig()
 
+    # Build $vectorSearch stage
+    vector_search_stage: dict[str, Any] = {
+        "index": config.vector_index_name,
+        "path": config.vector_path,
+        "queryVector": query_vector,
+        "numCandidates": config.vector_num_candidates,
+        "limit": top_k,
+    }
+
+    # Add prefilters if provided (MongoDB 8.0+ feature)
+    if filter_config:
+        from hybridrag.enhancements.filters import build_vector_search_filters
+        filters = build_vector_search_filters(filter_config)
+        if filters:
+            vector_search_stage["filter"] = filters
+            logger.debug(f"[VECTOR_SEARCH] Applied prefilters: {list(filters.keys())}")
+
     # Build pipeline
     pipeline: list[dict[str, Any]] = [
-        {
-            "$vectorSearch": {
-                "index": config.vector_index_name,
-                "path": config.vector_path,
-                "queryVector": query_vector,
-                "numCandidates": config.vector_num_candidates,
-                "limit": top_k,
-            }
-        },
+        {"$vectorSearch": vector_search_stage},
     ]
 
     # Add $lookup for document metadata if enabled and db provided
@@ -853,13 +867,14 @@ async def vector_only_search(
                 metadata=doc.get("metadata", {}),
                 document_title=doc.get("document_title", ""),
                 document_source=doc.get("document_source", ""),
-                search_type="vector_only",
+                search_type="vector_prefiltered" if filter_config else "vector_only",
             )
             for doc in results
         ]
 
         logger.info(
-            f"[VECTOR_SEARCH] Completed: results={len(search_results)}, threshold={config.cosine_threshold}"
+            f"[VECTOR_SEARCH] Completed: results={len(search_results)}, "
+            f"threshold={config.cosine_threshold}, filtered={filter_config is not None}"
         )
 
         return search_results

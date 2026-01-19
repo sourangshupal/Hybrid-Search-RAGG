@@ -12,16 +12,14 @@ from .vector_search_filters import (
     VectorSearchFilterConfig,
     build_vector_search_filters,
 )
-
-# Atlas search filters will be imported in Task 1.3
-# from .atlas_search_filters import (
-#     build_atlas_search_filters,
-#     AtlasSearchFilterConfig,
-# )
+from .atlas_search_filters import (
+    AtlasSearchFilterConfig,
+    build_atlas_search_filters,
+)
 
 __all__ = [
     "build_vector_search_filters",
     "VectorSearchFilterConfig",
-    # "build_atlas_search_filters",
-    # "AtlasSearchFilterConfig",
+    "build_atlas_search_filters",
+    "AtlasSearchFilterConfig",
 ]

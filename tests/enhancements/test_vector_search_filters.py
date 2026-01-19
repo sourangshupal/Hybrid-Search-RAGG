@@ -1,0 +1,66 @@
+"""Tests for vector search filter builder."""
+
+from datetime import datetime
+
+from hybridrag.enhancements.filters.vector_search_filters import (
+    VectorSearchFilterConfig,
+    build_vector_search_filters,
+)
+
+
+class TestBuildVectorSearchFilters:
+    """Test vector search filter builder with standard MongoDB operators."""
+
+    def test_empty_config_returns_empty_dict(self):
+        """Empty config should return empty filter dict."""
+        config = VectorSearchFilterConfig()
+        result = build_vector_search_filters(config)
+        assert result == {}
+
+    def test_date_range_filter(self):
+        """Date range uses standard $gte/$lte operators."""
+        start = datetime(2024, 1, 1)
+        end = datetime(2024, 12, 31)
+        config = VectorSearchFilterConfig(
+            start_date=start, end_date=end, timestamp_field="timestamp"
+        )
+        result = build_vector_search_filters(config)
+
+        # Vector search uses STANDARD MongoDB operators
+        assert "timestamp" in result
+        assert result["timestamp"]["$gte"] == start
+        assert result["timestamp"]["$lte"] == end
+
+    def test_equality_filter(self):
+        """Equality uses standard $eq operator."""
+        config = VectorSearchFilterConfig(
+            equality_filters={"senderName": "John", "status": "active"}
+        )
+        result = build_vector_search_filters(config)
+
+        # Vector search uses STANDARD MongoDB operators
+        assert result["senderName"]["$eq"] == "John"
+        assert result["status"]["$eq"] == "active"
+
+    def test_in_filter(self):
+        """In-list uses standard $in operator."""
+        config = VectorSearchFilterConfig(in_filters={"category": ["tech", "science"]})
+        result = build_vector_search_filters(config)
+
+        assert result["category"]["$in"] == ["tech", "science"]
+
+    def test_combined_filters(self):
+        """Multiple filter types combine correctly."""
+        start = datetime(2024, 1, 1)
+        config = VectorSearchFilterConfig(
+            start_date=start,
+            timestamp_field="created_at",
+            equality_filters={"source": "api"},
+            in_filters={"tags": ["urgent", "priority"]},
+        )
+        result = build_vector_search_filters(config)
+
+        assert "created_at" in result
+        assert result["created_at"]["$gte"] == start
+        assert result["source"]["$eq"] == "api"
+        assert result["tags"]["$in"] == ["urgent", "priority"]

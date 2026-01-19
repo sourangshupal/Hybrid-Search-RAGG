@@ -1,0 +1,208 @@
+# HybridRAG Makefile
+# World-class developer experience for MongoDB Atlas RAG
+#
+# Quick Start:
+#   make setup     - Initial project setup
+#   make dev       - Start development mode
+#   make test      - Run tests
+#   make help      - Show all commands
+#
+# Reference: https://github.com/romiluz13/Hybrid-Search-RAG
+
+.PHONY: help setup install dev test lint format clean build docker run-api run-ui
+
+# Default target
+.DEFAULT_GOAL := help
+
+# Python interpreter
+PYTHON := python3
+VENV := .venv
+PIP := $(VENV)/bin/pip
+PYTEST := $(VENV)/bin/pytest
+UVICORN := $(VENV)/bin/uvicorn
+
+# Colors for output
+BLUE := \033[0;34m
+GREEN := \033[0;32m
+YELLOW := \033[1;33m
+RED := \033[0;31m
+NC := \033[0m # No Color
+
+#---------------------------------------------------------------------------
+# Help
+#---------------------------------------------------------------------------
+
+help: ## Show this help message
+	@echo ""
+	@echo "$(BLUE)HybridRAG$(NC) - State-of-the-art RAG with MongoDB Atlas + Voyage AI"
+	@echo ""
+	@echo "$(GREEN)Usage:$(NC)"
+	@echo "  make $(YELLOW)<target>$(NC)"
+	@echo ""
+	@echo "$(GREEN)Setup & Install:$(NC)"
+	@grep -E '^(setup|install|install-dev|install-all):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-15s$(NC) %s\n", $$1, $$2}'
+	@echo ""
+	@echo "$(GREEN)Development:$(NC)"
+	@grep -E '^(dev|run-api|run-ui|run-cli):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-15s$(NC) %s\n", $$1, $$2}'
+	@echo ""
+	@echo "$(GREEN)Testing & Quality:$(NC)"
+	@grep -E '^(test|lint|format|typecheck):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-15s$(NC) %s\n", $$1, $$2}'
+	@echo ""
+	@echo "$(GREEN)Build & Deploy:$(NC)"
+	@grep -E '^(build|docker|clean):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-15s$(NC) %s\n", $$1, $$2}'
+	@echo ""
+
+#---------------------------------------------------------------------------
+# Setup & Installation
+#---------------------------------------------------------------------------
+
+setup: ## Initial setup: create venv, install deps, copy env
+	@echo "$(BLUE)Setting up HybridRAG...$(NC)"
+	@if [ ! -d "$(VENV)" ]; then \
+		echo "$(GREEN)Creating virtual environment...$(NC)"; \
+		$(PYTHON) -m venv $(VENV); \
+	fi
+	@echo "$(GREEN)Installing dependencies...$(NC)"
+	@$(PIP) install --upgrade pip
+	@$(PIP) install -e ".[all]"
+	@if [ ! -f ".env" ]; then \
+		echo "$(GREEN)Copying .env.example to .env...$(NC)"; \
+		cp .env.example .env; \
+		echo "$(YELLOW)Please edit .env with your API keys$(NC)"; \
+	fi
+	@echo ""
+	@echo "$(GREEN)Setup complete!$(NC)"
+	@echo ""
+	@echo "$(BLUE)Next steps:$(NC)"
+	@echo "  1. Edit $(YELLOW).env$(NC) with your API keys"
+	@echo "  2. Run $(YELLOW)make dev$(NC) to verify installation"
+	@echo "  3. Run $(YELLOW)make test$(NC) to run tests"
+	@echo ""
+
+install: ## Install core dependencies only
+	@$(PIP) install -e .
+
+install-dev: ## Install with development tools
+	@$(PIP) install -e ".[dev]"
+
+install-all: ## Install all dependencies (including optional)
+	@$(PIP) install -e ".[all]"
+
+#---------------------------------------------------------------------------
+# Development
+#---------------------------------------------------------------------------
+
+dev: ## Verify installation and show package info
+	@echo "$(BLUE)HybridRAG Development Environment$(NC)"
+	@echo ""
+	@$(VENV)/bin/python -c "import hybridrag; print(f'Version: {hybridrag.__version__}')"
+	@$(VENV)/bin/python -c "from hybridrag import create_hybridrag, SYSTEM_PROMPT, detect_query_type; print('Core imports: OK')"
+	@$(VENV)/bin/python -c "from hybridrag.enhancements import build_vector_search_filters; print('Enhancements: OK')"
+	@echo ""
+	@echo "$(GREEN)All imports successful!$(NC)"
+
+run-api: ## Start the FastAPI server
+	@echo "$(BLUE)Starting HybridRAG API on http://localhost:8000$(NC)"
+	@$(UVICORN) hybridrag.api.main:app --reload --host 0.0.0.0 --port 8000
+
+run-ui: ## Start the Chainlit UI
+	@echo "$(BLUE)Starting HybridRAG Chat UI$(NC)"
+	@$(VENV)/bin/chainlit run src/hybridrag/ui/chat.py --port 8001
+
+run-cli: ## Run the HybridRAG CLI
+	@$(VENV)/bin/hybridrag
+
+#---------------------------------------------------------------------------
+# Testing & Quality
+#---------------------------------------------------------------------------
+
+test: ## Run all tests
+	@echo "$(BLUE)Running tests...$(NC)"
+	@$(PYTEST) tests/ -v --ignore=tests/test_lightrag.py
+
+test-cov: ## Run tests with coverage report
+	@echo "$(BLUE)Running tests with coverage...$(NC)"
+	@$(PYTEST) tests/ -v --cov=src/hybridrag --cov-report=html --ignore=tests/test_lightrag.py
+	@echo "$(GREEN)Coverage report: htmlcov/index.html$(NC)"
+
+test-quick: ## Run fast unit tests only
+	@$(PYTEST) tests/enhancements/ -v
+
+lint: ## Run linting checks
+	@echo "$(BLUE)Running linters...$(NC)"
+	@$(VENV)/bin/ruff check src/hybridrag tests
+	@echo "$(GREEN)Linting passed!$(NC)"
+
+format: ## Format code with black and isort
+	@echo "$(BLUE)Formatting code...$(NC)"
+	@$(VENV)/bin/black src/hybridrag tests
+	@$(VENV)/bin/isort src/hybridrag tests
+	@echo "$(GREEN)Formatting complete!$(NC)"
+
+typecheck: ## Run type checking with mypy
+	@echo "$(BLUE)Running type checks...$(NC)"
+	@$(VENV)/bin/mypy src/hybridrag --ignore-missing-imports
+
+#---------------------------------------------------------------------------
+# Build & Deploy
+#---------------------------------------------------------------------------
+
+build: ## Build distribution packages
+	@echo "$(BLUE)Building packages...$(NC)"
+	@$(PIP) install build
+	@$(VENV)/bin/python -m build
+	@echo "$(GREEN)Build complete! Packages in dist/$(NC)"
+
+docker: ## Build Docker image
+	@echo "$(BLUE)Building Docker image...$(NC)"
+	@docker build -t hybridrag:latest .
+
+clean: ## Clean build artifacts and caches
+	@echo "$(BLUE)Cleaning up...$(NC)"
+	@rm -rf build/
+	@rm -rf dist/
+	@rm -rf *.egg-info/
+	@rm -rf src/*.egg-info/
+	@rm -rf .pytest_cache/
+	@rm -rf .mypy_cache/
+	@rm -rf .ruff_cache/
+	@rm -rf htmlcov/
+	@find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+	@echo "$(GREEN)Clean complete!$(NC)"
+
+#---------------------------------------------------------------------------
+# MongoDB Atlas Setup
+#---------------------------------------------------------------------------
+
+atlas-check: ## Check MongoDB connection
+	@echo "$(BLUE)Checking MongoDB Atlas connection...$(NC)"
+	@$(VENV)/bin/python -c "\
+from hybridrag.config import get_settings; \
+from pymongo import MongoClient; \
+s = get_settings(); \
+c = MongoClient(s.MONGODB_URI); \
+print(f'Connected to: {c.server_info()[\"version\"]}'); \
+print(f'Database: {s.MONGODB_DATABASE}')"
+
+atlas-indexes: ## Show MongoDB Atlas index status
+	@echo "$(BLUE)Checking Atlas Search indexes...$(NC)"
+	@$(VENV)/bin/python -c "\
+from hybridrag.config import get_settings; \
+from pymongo import MongoClient; \
+s = get_settings(); \
+c = MongoClient(s.MONGODB_URI); \
+db = c[s.MONGODB_DATABASE]; \
+for coll in db.list_collection_names(): \
+    print(f'\\n{coll}:'); \
+    for idx in db[coll].list_indexes(): \
+        print(f'  - {idx[\"name\"]}')"
+
+#---------------------------------------------------------------------------
+# Quick Commands
+#---------------------------------------------------------------------------
+
+check: lint test ## Run linting and tests
+
+ci: lint typecheck test ## Run full CI suite
+
+reset: clean setup ## Clean and re-setup

@@ -20,15 +20,18 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
-from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
     from pymongo.asynchronous.collection import AsyncCollection
     from pymongo.asynchronous.database import AsyncDatabase
+
+    from hybridrag.enhancements.filters import (
+        AtlasSearchFilterConfig,
+    )
 
 logger = logging.getLogger("hybridrag.mongodb_hybrid")
 logger.setLevel(logging.INFO)
@@ -46,15 +49,25 @@ class SearchResult(BaseModel):
     """
 
     chunk_id: str = Field(..., description="MongoDB ObjectId of chunk as string")
-    document_id: str = Field(default="", description="Parent document ObjectId as string")
+    document_id: str = Field(
+        default="", description="Parent document ObjectId as string"
+    )
     content: str = Field(..., description="Chunk text content")
-    similarity: float = Field(..., description="Relevance score (0-1 for vector, RRF score for hybrid)")
-    metadata: Dict[str, Any] = Field(default_factory=dict, description="Chunk metadata (source, page, etc.)")
+    similarity: float = Field(
+        ..., description="Relevance score (0-1 for vector, RRF score for hybrid)"
+    )
+    metadata: dict[str, Any] = Field(
+        default_factory=dict, description="Chunk metadata (source, page, etc.)"
+    )
     document_title: str = Field(default="", description="Title from document lookup")
-    document_source: str = Field(default="", description="Source path from document lookup")
-    search_type: str = Field(default="unknown", description="Type of search that produced this result")
+    document_source: str = Field(
+        default="", description="Source path from document lookup"
+    )
+    search_type: str = Field(
+        default="unknown", description="Type of search that produced this result"
+    )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for backward compatibility."""
         return self.model_dump()
 
@@ -90,7 +103,7 @@ class MongoDBHybridSearchConfig:
 
 
 async def create_text_search_index_if_not_exists(
-    collection: "AsyncCollection",
+    collection: AsyncCollection,
     index_name: str = "text_search_index",
     search_fields: list[str] | None = None,
 ) -> bool:
@@ -150,7 +163,7 @@ async def create_text_search_index_if_not_exists(
 
 
 async def hybrid_search_with_rank_fusion(
-    collection: "AsyncCollection",
+    collection: AsyncCollection,
     query_text: str,
     query_vector: list[float],
     top_k: int = 10,
@@ -199,7 +212,8 @@ async def hybrid_search_with_rank_fusion(
                                     "path": config.vector_path,
                                     "queryVector": query_vector,
                                     "numCandidates": config.vector_num_candidates,
-                                    "limit": top_k * 2,  # Get more candidates for fusion
+                                    "limit": top_k
+                                    * 2,  # Get more candidates for fusion
                                 }
                             }
                         ],
@@ -265,13 +279,11 @@ async def hybrid_search_with_rank_fusion(
             # Last resort: vector-only search
             logger.error(f"[HYBRID_SEARCH] Manual RRF also failed: {rrf_err}")
             logger.warning("[HYBRID_SEARCH] Last resort: vector-only search")
-            return await vector_only_search(
-                collection, query_vector, top_k, config
-            )
+            return await vector_only_search(collection, query_vector, top_k, config)
 
 
 async def hybrid_search_with_score_fusion(
-    collection: "AsyncCollection",
+    collection: AsyncCollection,
     query_text: str,
     query_vector: list[float],
     top_k: int = 10,
@@ -383,23 +395,26 @@ async def hybrid_search_with_score_fusion(
             # Last resort: vector-only search
             logger.error(f"[HYBRID_SEARCH] Manual RRF also failed: {rrf_err}")
             logger.warning("[HYBRID_SEARCH] Last resort: vector-only search")
-            return await vector_only_search(
-                collection, query_vector, top_k, config
-            )
+            return await vector_only_search(collection, query_vector, top_k, config)
 
 
 async def text_only_search(
-    collection: "AsyncCollection",
+    collection: AsyncCollection,
     query_text: str,
     top_k: int = 10,
     config: MongoDBHybridSearchConfig | None = None,
-    db: "AsyncDatabase | None" = None,
+    db: AsyncDatabase | None = None,
+    filter_config: AtlasSearchFilterConfig | None = None,
+    search_paths: list[str] | None = None,
 ) -> list[SearchResult]:
     """
-    Full-text search using MongoDB Atlas Search with fuzzy matching.
+    Full-text search using MongoDB Atlas Search with compound queries.
 
-    Uses $search operator for keyword matching with fuzzy matching support.
-    Optionally joins with documents collection for metadata.
+    Uses $search operator with compound query for:
+    - Multi-field weighted search
+    - Fuzzy matching for typo tolerance
+    - Prefiltering with Atlas Search operators
+
     Works on all Atlas tiers including M0 (free tier).
 
     Args:
@@ -408,6 +423,8 @@ async def text_only_search(
         top_k: Number of results to return
         config: Search configuration
         db: Database instance for $lookup (optional)
+        filter_config: Atlas Search filter configuration (optional)
+        search_paths: Fields to search (default: ["content"])
 
     Returns:
         List of SearchResult objects ordered by text relevance
@@ -415,56 +432,80 @@ async def text_only_search(
     if config is None:
         config = MongoDBHybridSearchConfig()
 
-    # Build pipeline with fuzzy matching
+    if search_paths is None:
+        search_paths = [config.text_search_path]
+
+    # Build the text clause with fuzzy matching
+    text_clause: dict[str, Any] = {
+        "text": {
+            "query": query_text,
+            "path": search_paths,
+            "fuzzy": {
+                "maxEdits": config.fuzzy_max_edits,
+                "prefixLength": config.fuzzy_prefix_length,
+            },
+        }
+    }
+
+    # Build compound query
+    compound_query: dict[str, Any] = {"must": [text_clause]}
+
+    # Add filters if provided
+    if filter_config:
+        from hybridrag.enhancements.filters import build_atlas_search_filters
+
+        filters = build_atlas_search_filters(filter_config)
+        if filters:
+            compound_query["filter"] = filters
+            logger.debug(f"[TEXT_SEARCH] Applied {len(filters)} Atlas Search filters")
+
+    # Build pipeline with compound query
     pipeline: list[dict[str, Any]] = [
         {
             "$search": {
                 "index": config.text_index_name,
-                "text": {
-                    "query": query_text,
-                    "path": config.text_search_path,
-                    "fuzzy": {
-                        "maxEdits": config.fuzzy_max_edits,
-                        "prefixLength": config.fuzzy_prefix_length,
-                    },
-                },
+                "compound": compound_query,
             }
         },
-        {"$limit": top_k * 2},  # Over-fetch for better RRF results
+        {"$limit": top_k * 2},  # Over-fetch for better results
     ]
 
     # Add $lookup for document metadata if enabled and db provided
     if config.enable_document_lookup and db is not None:
-        pipeline.extend([
-            {
-                "$lookup": {
-                    "from": config.documents_collection,
-                    "localField": "document_id",
-                    "foreignField": "_id",
-                    "as": "document_info",
-                }
-            },
-            {
-                "$unwind": {
-                    "path": "$document_info",
-                    "preserveNullAndEmptyArrays": True,
-                }
-            },
-        ])
+        pipeline.extend(
+            [
+                {
+                    "$lookup": {
+                        "from": config.documents_collection,
+                        "localField": "document_id",
+                        "foreignField": "_id",
+                        "as": "document_info",
+                    }
+                },
+                {
+                    "$unwind": {
+                        "path": "$document_info",
+                        "preserveNullAndEmptyArrays": True,
+                    }
+                },
+            ]
+        )
 
     # Project final fields
-    pipeline.append({
-        "$project": {
-            "chunk_id": "$_id",
-            "document_id": 1,
-            "content": 1,
-            "similarity": {"$meta": "searchScore"},
-            "metadata": 1,
-            "document_title": {"$ifNull": ["$document_info.title", ""]},
-            "document_source": {"$ifNull": ["$document_info.source", ""]},
-            "vector": 0,
+    pipeline.append(
+        {
+            "$project": {
+                "chunk_id": "$_id",
+                "document_id": 1,
+                "content": 1,
+                "similarity": {"$meta": "searchScore"},
+                "metadata": 1,
+                "document_title": {"$ifNull": ["$document_info.title", ""]},
+                "document_source": {"$ifNull": ["$document_info.source", ""]},
+                "vector": 0,
+            }
         }
-    })
+    )
 
     try:
         cursor = await collection.aggregate(pipeline, allowDiskUse=True)
@@ -480,19 +521,72 @@ async def text_only_search(
                 metadata=doc.get("metadata", {}),
                 document_title=doc.get("document_title", ""),
                 document_source=doc.get("document_source", ""),
-                search_type="text_only",
+                search_type="text_compound" if filter_config else "text_only",
             )
             for doc in results
         ]
 
         logger.info(
-            f"[TEXT_SEARCH] Completed: query='{query_text[:50]}...', results={len(search_results)}"
+            f"[TEXT_SEARCH] Completed: query='{query_text[:50]}...', "
+            f"results={len(search_results)}, filtered={filter_config is not None}"
         )
 
         return search_results
 
     except Exception as e:
-        logger.warning(f"[TEXT_SEARCH] Text search failed: {e}")
+        logger.warning(f"[TEXT_SEARCH] Compound text search failed: {e}")
+        # Fallback to simple text search without compound
+        return await _fallback_simple_text_search(
+            collection, query_text, top_k, config, db
+        )
+
+
+async def _fallback_simple_text_search(
+    collection: AsyncCollection,
+    query_text: str,
+    top_k: int,
+    config: MongoDBHybridSearchConfig,
+    db: AsyncDatabase | None,
+) -> list[SearchResult]:
+    """Fallback to simple text search when compound query fails."""
+    pipeline: list[dict[str, Any]] = [
+        {
+            "$search": {
+                "index": config.text_index_name,
+                "text": {
+                    "query": query_text,
+                    "path": config.text_search_path,
+                },
+            }
+        },
+        {"$limit": top_k},
+        {
+            "$project": {
+                "chunk_id": "$_id",
+                "content": 1,
+                "similarity": {"$meta": "searchScore"},
+                "metadata": 1,
+            }
+        },
+    ]
+
+    try:
+        cursor = await collection.aggregate(pipeline, allowDiskUse=True)
+        results = await cursor.to_list(length=None)
+
+        return [
+            SearchResult(
+                chunk_id=str(doc.get("chunk_id", "")),
+                document_id="",
+                content=doc.get("content", ""),
+                similarity=doc.get("similarity", 0.0),
+                metadata=doc.get("metadata", {}),
+                search_type="text_simple_fallback",
+            )
+            for doc in results
+        ]
+    except Exception as e:
+        logger.error(f"[TEXT_SEARCH] Fallback also failed: {e}")
         return []
 
 
@@ -524,8 +618,8 @@ def reciprocal_rank_fusion(
         - Standard k=60 performs well across various datasets
     """
     # Build score dictionary by chunk_id
-    rrf_scores: Dict[str, float] = {}
-    chunk_map: Dict[str, SearchResult] = {}
+    rrf_scores: dict[str, float] = {}
+    chunk_map: dict[str, SearchResult] = {}
 
     # Process each search result list
     for results in result_lists:
@@ -543,11 +637,7 @@ def reciprocal_rank_fusion(
                 chunk_map[chunk_id] = result
 
     # Sort by combined RRF score (descending)
-    sorted_chunks = sorted(
-        rrf_scores.items(),
-        key=lambda x: x[1],
-        reverse=True
-    )
+    sorted_chunks = sorted(rrf_scores.items(), key=lambda x: x[1], reverse=True)
 
     # Build final result list with updated similarity scores
     merged_results = []
@@ -575,12 +665,12 @@ def reciprocal_rank_fusion(
 
 
 async def manual_hybrid_search_with_rrf(
-    collection: "AsyncCollection",
+    collection: AsyncCollection,
     query_text: str,
     query_vector: list[float],
     top_k: int = 10,
     config: MongoDBHybridSearchConfig | None = None,
-    db: "AsyncDatabase | None" = None,
+    db: AsyncDatabase | None = None,
 ) -> list[SearchResult]:
     """
     Manual RRF implementation for M0/M2 tiers.
@@ -644,11 +734,15 @@ async def manual_hybrid_search_with_rrf(
 
     # If only one succeeded, return those results directly
     if not vector_results:
-        logger.info("[MANUAL_HYBRID] Only text search succeeded, returning text results")
+        logger.info(
+            "[MANUAL_HYBRID] Only text search succeeded, returning text results"
+        )
         return text_results[:top_k]
 
     if not text_results:
-        logger.info("[MANUAL_HYBRID] Only vector search succeeded, returning vector results")
+        logger.info(
+            "[MANUAL_HYBRID] Only vector search succeeded, returning vector results"
+        )
         return vector_results[:top_k]
 
     # Merge results using Reciprocal Rank Fusion
@@ -670,11 +764,11 @@ async def manual_hybrid_search_with_rrf(
 
 
 async def vector_only_search(
-    collection: "AsyncCollection",
+    collection: AsyncCollection,
     query_vector: list[float],
     top_k: int = 10,
     config: MongoDBHybridSearchConfig | None = None,
-    db: "AsyncDatabase | None" = None,
+    db: AsyncDatabase | None = None,
 ) -> list[SearchResult]:
     """
     Perform semantic vector search using MongoDB Atlas Vector Search.
@@ -707,36 +801,40 @@ async def vector_only_search(
 
     # Add $lookup for document metadata if enabled and db provided
     if config.enable_document_lookup and db is not None:
-        pipeline.extend([
-            {
-                "$lookup": {
-                    "from": config.documents_collection,
-                    "localField": "document_id",
-                    "foreignField": "_id",
-                    "as": "document_info",
-                }
-            },
-            {
-                "$unwind": {
-                    "path": "$document_info",
-                    "preserveNullAndEmptyArrays": True,
-                }
-            },
-        ])
+        pipeline.extend(
+            [
+                {
+                    "$lookup": {
+                        "from": config.documents_collection,
+                        "localField": "document_id",
+                        "foreignField": "_id",
+                        "as": "document_info",
+                    }
+                },
+                {
+                    "$unwind": {
+                        "path": "$document_info",
+                        "preserveNullAndEmptyArrays": True,
+                    }
+                },
+            ]
+        )
 
     # Project final fields
-    pipeline.append({
-        "$project": {
-            "chunk_id": "$_id",
-            "document_id": 1,
-            "content": 1,
-            "similarity": {"$meta": "vectorSearchScore"},
-            "metadata": 1,
-            "document_title": {"$ifNull": ["$document_info.title", ""]},
-            "document_source": {"$ifNull": ["$document_info.source", ""]},
-            "vector": 0,
+    pipeline.append(
+        {
+            "$project": {
+                "chunk_id": "$_id",
+                "document_id": 1,
+                "content": 1,
+                "similarity": {"$meta": "vectorSearchScore"},
+                "metadata": 1,
+                "document_title": {"$ifNull": ["$document_info.title", ""]},
+                "document_source": {"$ifNull": ["$document_info.source", ""]},
+                "vector": 0,
+            }
         }
-    })
+    )
 
     # Filter by cosine threshold
     pipeline.append({"$match": {"similarity": {"$gte": config.cosine_threshold}}})
@@ -781,7 +879,7 @@ class MongoDBHybridSearcher:
 
     def __init__(
         self,
-        db: "AsyncDatabase",
+        db: AsyncDatabase,
         workspace: str = "",
         config: MongoDBHybridSearchConfig | None = None,
     ):
@@ -796,7 +894,9 @@ class MongoDBHybridSearcher:
             return f"{self.workspace}_{namespace}"
         return namespace
 
-    async def ensure_text_index(self, namespace: str, search_fields: list[str] | None = None) -> None:
+    async def ensure_text_index(
+        self, namespace: str, search_fields: list[str] | None = None
+    ) -> None:
         """
         Ensure text search index exists for a collection.
 
@@ -851,8 +951,16 @@ class MongoDBHybridSearcher:
 
         # Update config with workspace-specific index names
         config = MongoDBHybridSearchConfig(
-            vector_index_name=f"vector_knn_index_{collection_name}" if self.workspace else "vector_knn_index",
-            text_index_name=f"text_search_index_{collection_name}" if self.workspace else f"text_search_index_{namespace}",
+            vector_index_name=(
+                f"vector_knn_index_{collection_name}"
+                if self.workspace
+                else "vector_knn_index"
+            ),
+            text_index_name=(
+                f"text_search_index_{collection_name}"
+                if self.workspace
+                else f"text_search_index_{namespace}"
+            ),
             vector_weight=self.config.vector_weight,
             text_weight=self.config.text_weight,
             cosine_threshold=self.config.cosine_threshold,
@@ -870,7 +978,7 @@ class MongoDBHybridSearcher:
 
 # Factory function for easy integration
 def create_hybrid_searcher(
-    db: "AsyncDatabase",
+    db: AsyncDatabase,
     workspace: str = "",
     vector_weight: float = 0.6,
     text_weight: float = 0.4,

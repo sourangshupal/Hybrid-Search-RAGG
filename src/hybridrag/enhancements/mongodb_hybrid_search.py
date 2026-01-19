@@ -84,7 +84,12 @@ class MongoDBHybridSearchConfig:
 
     # Full-text search settings
     text_index_name: str = "text_search_index"
-    text_search_path: str = "content"  # Field(s) to search
+    text_search_path: str | list[str] = "content"  # Can be single field or list
+
+    # Multi-field search paths with weights
+    # Keys are field paths, values are boost weights
+    # Example: {"content": 10, "topics": 5, "senderName": 1}
+    text_search_path_weights: dict[str, float] | None = None
 
     # Fuzzy search settings (for text search)
     fuzzy_max_edits: int = 2  # Max character edits for fuzzy matching
@@ -101,6 +106,14 @@ class MongoDBHybridSearchConfig:
 
     # Filtering
     cosine_threshold: float = 0.3
+
+    def get_search_paths(self) -> list[str]:
+        """Get list of search paths."""
+        if self.text_search_path_weights:
+            return list(self.text_search_path_weights.keys())
+        if isinstance(self.text_search_path, list):
+            return self.text_search_path
+        return [self.text_search_path]
 
 
 async def create_text_search_index_if_not_exists(
@@ -169,8 +182,8 @@ async def hybrid_search_with_rank_fusion(
     query_vector: list[float],
     top_k: int = 10,
     config: MongoDBHybridSearchConfig | None = None,
-    vector_filter_config: "VectorSearchFilterConfig | None" = None,
-    atlas_filter_config: "AtlasSearchFilterConfig | None" = None,
+    vector_filter_config: VectorSearchFilterConfig | None = None,
+    atlas_filter_config: AtlasSearchFilterConfig | None = None,
 ) -> list[dict[str, Any]]:
     """
     Perform hybrid search using MongoDB's $rankFusion.
@@ -220,6 +233,7 @@ async def hybrid_search_with_rank_fusion(
     # Add vector prefilters if provided
     if vector_filter_config:
         from hybridrag.enhancements.filters import build_vector_search_filters
+
         vector_filters = build_vector_search_filters(vector_filter_config)
         if vector_filters:
             vector_search_stage["filter"] = vector_filters
@@ -241,6 +255,7 @@ async def hybrid_search_with_rank_fusion(
     # Add Atlas Search filters if provided
     if atlas_filter_config:
         from hybridrag.enhancements.filters import build_atlas_search_filters
+
         atlas_filters = build_atlas_search_filters(atlas_filter_config)
         if atlas_filters:
             compound_query["filter"] = atlas_filters
@@ -251,9 +266,7 @@ async def hybrid_search_with_rank_fusion(
             "$rankFusion": {
                 "input": {
                     "pipelines": {
-                        "vector": [
-                            {"$vectorSearch": vector_search_stage}
-                        ],
+                        "vector": [{"$vectorSearch": vector_search_stage}],
                         "text": [
                             {
                                 "$search": {
@@ -287,7 +300,11 @@ async def hybrid_search_with_rank_fusion(
                     **doc,
                     "id": doc.get("_id"),
                     "score": doc.get("hybrid_score"),
-                    "search_type": "hybrid_rrf_filtered" if (vector_filter_config or atlas_filter_config) else "hybrid_rrf",
+                    "search_type": (
+                        "hybrid_rrf_filtered"
+                        if (vector_filter_config or atlas_filter_config)
+                        else "hybrid_rrf"
+                    ),
                 }
             )
 
@@ -799,7 +816,7 @@ async def vector_only_search(
     top_k: int = 10,
     config: MongoDBHybridSearchConfig | None = None,
     db: AsyncDatabase | None = None,
-    filter_config: "VectorSearchFilterConfig | None" = None,
+    filter_config: VectorSearchFilterConfig | None = None,
 ) -> list[SearchResult]:
     """
     Perform semantic vector search using MongoDB Atlas Vector Search.
@@ -832,6 +849,7 @@ async def vector_only_search(
     # Add prefilters if provided (MongoDB 8.0+ feature)
     if filter_config:
         from hybridrag.enhancements.filters import build_vector_search_filters
+
         filters = build_vector_search_filters(filter_config)
         if filters:
             vector_search_stage["filter"] = filters

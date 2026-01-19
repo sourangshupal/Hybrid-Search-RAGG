@@ -88,6 +88,16 @@ except ImportError:
     RAGEvaluator = None
     run_evaluation = None
 
+# Prompts exports (system prompts, reranking, entity extraction)
+from .prompts import (
+    SYSTEM_PROMPT,
+    SYSTEM_PROMPT_COMPACT,
+    create_system_prompt,
+    detect_query_type,
+    select_rerank_instruction,
+    QueryType,
+)
+
 # Query parameters for RAG operations
 from .core.rag import QueryParam
 
@@ -142,6 +152,13 @@ __all__ = [
     # Evaluation (RAGAS)
     "RAGEvaluator",
     "run_evaluation",
+    # Prompts
+    "SYSTEM_PROMPT",
+    "SYSTEM_PROMPT_COMPACT",
+    "create_system_prompt",
+    "detect_query_type",
+    "select_rerank_instruction",
+    "QueryType",
     # CLI
     "run_cli",
 ]

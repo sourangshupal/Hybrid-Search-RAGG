@@ -89,12 +89,12 @@ def build_atlas_search_filters(config: AtlasSearchFilterConfig) -> list[dict[str
 
     # Date range filter using 'range' operator
     if config.start_date or config.end_date:
-        range_filter: dict[str, Any] = {"path": config.timestamp_field}
+        date_range_filter: dict[str, Any] = {"path": config.timestamp_field}
         if config.start_date:
-            range_filter["gte"] = config.start_date
+            date_range_filter["gte"] = config.start_date
         if config.end_date:
-            range_filter["lte"] = config.end_date
-        filters.append({"range": range_filter})
+            date_range_filter["lte"] = config.end_date
+        filters.append({"range": date_range_filter})
 
     # Equality filters using 'equals' operator
     for field_name, value in config.equality_filters.items():

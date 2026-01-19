@@ -1,11 +1,22 @@
+import asyncio
 import os
 import re
 import time
 from dataclasses import dataclass, field
-import numpy as np
-import asyncio
+from typing import TYPE_CHECKING, Any, final
 
-from typing import Any, Union, final
+import numpy as np
+
+if TYPE_CHECKING:
+    from hybridrag.enhancements.filters import VectorSearchFilterConfig
+from pymongo import (
+    AsyncMongoClient,  # type: ignore
+    UpdateOne,  # type: ignore
+)
+from pymongo.asynchronous.collection import AsyncCollection  # type: ignore
+from pymongo.asynchronous.database import AsyncDatabase  # type: ignore
+from pymongo.errors import PyMongoError  # type: ignore
+from pymongo.operations import SearchIndexModel  # type: ignore
 
 from ..base import (
     BaseGraphStorage,
@@ -15,17 +26,10 @@ from ..base import (
     DocStatus,
     DocStatusStorage,
 )
-from ..utils import logger, compute_mdhash_id
-from ..types import KnowledgeGraph, KnowledgeGraphNode, KnowledgeGraphEdge
 from ..constants import GRAPH_FIELD_SEP
 from ..kg.shared_storage import get_data_init_lock
-
-from pymongo import AsyncMongoClient  # type: ignore
-from pymongo import UpdateOne  # type: ignore
-from pymongo.asynchronous.database import AsyncDatabase  # type: ignore
-from pymongo.asynchronous.collection import AsyncCollection  # type: ignore
-from pymongo.operations import SearchIndexModel  # type: ignore
-from pymongo.errors import PyMongoError  # type: ignore
+from ..types import KnowledgeGraph, KnowledgeGraphEdge, KnowledgeGraphNode
+from ..utils import compute_mdhash_id, logger
 
 # Graph traversal mode: "bidirectional" or "in_out_bound"
 # Can be overridden via MONGO_GRAPH_BFS_MODE environment variable
@@ -361,7 +365,7 @@ class MongoDocStatusStorage(DocStatusStorage):
             self.db = None
             self._data = None
 
-    async def get_by_id(self, id: str) -> Union[dict[str, Any], None]:
+    async def get_by_id(self, id: str) -> dict[str, Any] | None:
         return await self._data.find_one({"_id": id})
 
     async def get_by_ids(self, ids: list[str]) -> list[dict[str, Any]]:
@@ -698,7 +702,7 @@ class MongoDocStatusStorage(DocStatusStorage):
 
         return counts
 
-    async def get_doc_by_file_path(self, file_path: str) -> Union[dict[str, Any], None]:
+    async def get_doc_by_file_path(self, file_path: str) -> dict[str, Any] | None:
         """Get document by file path
 
         Args:
@@ -2193,9 +2197,23 @@ class MongoVectorDBStorage(BaseVectorStorage):
         return list_data
 
     async def query(
-        self, query: str, top_k: int, query_embedding: list[float] = None
+        self,
+        query: str,
+        top_k: int,
+        query_embedding: list[float] = None,
+        filter_config: "VectorSearchFilterConfig | None" = None,
     ) -> list[dict[str, Any]]:
-        """Queries the vector database using Atlas Vector Search."""
+        """Queries the vector database using Atlas Vector Search with optional prefiltering.
+
+        Args:
+            query: Query text (used if query_embedding not provided)
+            top_k: Number of results to return
+            query_embedding: Pre-computed query embedding
+            filter_config: Optional vector search filter configuration
+
+        Returns:
+            List of matching documents with scores
+        """
         if query_embedding is not None:
             # Convert numpy array to list if needed for MongoDB compatibility
             if hasattr(query_embedding, "tolist"):
@@ -2210,17 +2228,29 @@ class MongoVectorDBStorage(BaseVectorStorage):
             # Convert numpy array to a list to ensure compatibility with MongoDB
             query_vector = embedding[0].tolist()
 
-        # Define the aggregation pipeline with the converted query vector
+        # Build $vectorSearch stage
+        vector_search_config: dict[str, Any] = {
+            "index": self._index_name,
+            "path": "vector",
+            "queryVector": query_vector,
+            "numCandidates": 100,
+            "limit": top_k,
+        }
+
+        # Add prefilters if provided (MongoDB 8.0+ feature)
+        if filter_config:
+            from hybridrag.enhancements.filters import build_vector_search_filters
+
+            filters = build_vector_search_filters(filter_config)
+            if filters:
+                vector_search_config["filter"] = filters
+                logger.debug(
+                    f"[VECTOR_SEARCH] Applied prefilters: {list(filters.keys())}"
+                )
+
+        # Define the aggregation pipeline
         pipeline = [
-            {
-                "$vectorSearch": {
-                    "index": self._index_name,  # Use stored index name for consistency
-                    "path": "vector",
-                    "queryVector": query_vector,
-                    "numCandidates": 100,  # Adjust for performance
-                    "limit": top_k,
-                }
-            },
+            {"$vectorSearch": vector_search_config},
             {"$addFields": {"score": {"$meta": "vectorSearchScore"}}},
             {"$match": {"score": {"$gte": self.cosine_better_than_threshold}}},
             {"$project": {"vector": 0}},
@@ -2230,13 +2260,13 @@ class MongoVectorDBStorage(BaseVectorStorage):
         cursor = await self._data.aggregate(pipeline, allowDiskUse=True)
         results = await cursor.to_list(length=None)
 
-        # Format and return the results with created_at field
+        # Format and return the results
         return [
             {
                 **doc,
-                "id": doc["_id"],
-                "distance": doc.get("score", None),
-                "created_at": doc.get("created_at"),  # Include created_at field
+                "id": doc.get("_id"),
+                "score": doc.get("score"),
+                "search_type": "vector_prefiltered" if filter_config else "vector_only",
             }
             for doc in results
         ]
@@ -2370,7 +2400,7 @@ class MongoVectorDBStorage(BaseVectorStorage):
                         "combination": {
                             "weights": {
                                 "vectorPipeline": 0.6,  # Semantic similarity weight
-                                "textPipeline": 0.4,    # Keyword matching weight
+                                "textPipeline": 0.4,  # Keyword matching weight
                             }
                         },
                         "scoreDetails": True,  # Include score breakdown
@@ -2420,10 +2450,14 @@ class MongoVectorDBStorage(BaseVectorStorage):
                             "method": "expression",
                             "expression": {
                                 "$sum": [
-                                    {"$multiply": ["$vectorPipeline", 0.6]},  # Vector weight
-                                    {"$multiply": ["$textPipeline", 0.4]},    # Text weight
+                                    {
+                                        "$multiply": ["$vectorPipeline", 0.6]
+                                    },  # Vector weight
+                                    {
+                                        "$multiply": ["$textPipeline", 0.4]
+                                    },  # Text weight
                                 ]
-                            }
+                            },
                         },
                         "scoreDetails": True,
                     }
@@ -2492,7 +2526,7 @@ class MongoVectorDBStorage(BaseVectorStorage):
         Returns:
             List of documents with RRF fusion scores
         """
-        logger.info(f"[MANUAL_RRF] Starting manual RRF hybrid search")
+        logger.info("[MANUAL_RRF] Starting manual RRF hybrid search")
 
         # 1. Run vector search
         vector_pipeline = [
@@ -2513,7 +2547,9 @@ class MongoVectorDBStorage(BaseVectorStorage):
         try:
             cursor = await self._data.aggregate(vector_pipeline, allowDiskUse=True)
             vector_results = await cursor.to_list(length=None)
-            logger.info(f"[MANUAL_RRF] Vector search returned {len(vector_results)} results")
+            logger.info(
+                f"[MANUAL_RRF] Vector search returned {len(vector_results)} results"
+            )
         except PyMongoError as e:
             logger.warning(f"[MANUAL_RRF] Vector search failed: {e}")
 
@@ -2534,7 +2570,9 @@ class MongoVectorDBStorage(BaseVectorStorage):
         try:
             cursor = await self._data.aggregate(text_pipeline, allowDiskUse=True)
             text_results = await cursor.to_list(length=None)
-            logger.info(f"[MANUAL_RRF] Text search returned {len(text_results)} results")
+            logger.info(
+                f"[MANUAL_RRF] Text search returned {len(text_results)} results"
+            )
         except PyMongoError as e:
             logger.warning(f"[MANUAL_RRF] Text search failed: {e}")
 

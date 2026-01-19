@@ -349,6 +349,7 @@ for r in results:
 - [Installation Guide](docs/installation.md)
 - [Configuration Options](docs/configuration.md)
 - [Query Modes Explained](docs/query-modes.md)
+- [Enhanced Search Features](docs/enhanced-search.md) - Graph traversal, mix mode, entity boosting
 - [API Reference](docs/api.md)
 - [Deployment Guide](docs/deployment.md)
 

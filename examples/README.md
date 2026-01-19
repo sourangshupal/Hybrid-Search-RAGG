@@ -52,6 +52,17 @@ Prompts module demonstration:
 python examples/03_prompts_usage.py
 ```
 
+### 04_mix_mode_search.py
+Mix mode search capabilities:
+- Graph traversal configuration
+- Mix mode search configuration
+- Result analysis with source breakdown
+- Entity-only graph search patterns
+
+```bash
+python examples/04_mix_mode_search.py
+```
+
 ## Prerequisites
 
 ### Required API Keys

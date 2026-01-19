@@ -445,6 +445,184 @@ async def hybrid_search_with_score_fusion(
             return await vector_only_search(collection, query_vector, top_k, config)
 
 
+def build_weighted_text_search_clause(
+    query_text: str,
+    path_weights: dict[str, float],
+    fuzzy_max_edits: int = 2,
+    fuzzy_prefix_length: int = 3,
+) -> list[dict[str, Any]]:
+    """
+    Build weighted text search clauses for multi-field search.
+
+    Creates separate text clauses for each field with score boosting.
+
+    Args:
+        query_text: Search query text
+        path_weights: Dict of {field_path: boost_weight}
+        fuzzy_max_edits: Max edits for fuzzy matching
+        fuzzy_prefix_length: Required prefix length for fuzzy
+
+    Returns:
+        List of text search clauses with score boosting
+
+    Example:
+        path_weights = {"content": 10, "topics": 5, "senderName": 1}
+        Returns clauses where matches in "content" score 10x higher
+    """
+    clauses = []
+
+    for path, weight in path_weights.items():
+        clause = {
+            "text": {
+                "query": query_text,
+                "path": path,
+                "fuzzy": {
+                    "maxEdits": fuzzy_max_edits,
+                    "prefixLength": fuzzy_prefix_length,
+                },
+                "score": {"boost": {"value": weight}},
+            }
+        }
+        clauses.append(clause)
+
+    return clauses
+
+
+async def multi_field_text_search(
+    collection: AsyncCollection,
+    query_text: str,
+    top_k: int = 10,
+    config: MongoDBHybridSearchConfig | None = None,
+    db: AsyncDatabase | None = None,
+    filter_config: AtlasSearchFilterConfig | None = None,
+) -> list[SearchResult]:
+    """
+    Perform multi-field weighted text search.
+
+    Searches across multiple fields with different weights for each field.
+    Higher weights mean matches in that field score higher.
+
+    Args:
+        collection: MongoDB collection
+        query_text: Search query
+        top_k: Number of results
+        config: Search config with path_weights
+        db: Database for lookups
+        filter_config: Optional Atlas Search filters
+
+    Returns:
+        List of SearchResult ordered by weighted relevance
+    """
+    if config is None:
+        config = MongoDBHybridSearchConfig()
+
+    # Use path weights if provided, otherwise fall back to simple search
+    if not config.text_search_path_weights:
+        return await text_only_search(
+            collection, query_text, top_k, config, db, filter_config
+        )
+
+    # Build weighted search clauses
+    weighted_clauses = build_weighted_text_search_clause(
+        query_text,
+        config.text_search_path_weights,
+        config.fuzzy_max_edits,
+        config.fuzzy_prefix_length,
+    )
+
+    # Build compound query with "should" for weighted fields
+    compound_query: dict[str, Any] = {
+        "should": weighted_clauses,
+        "minimumShouldMatch": 1,  # At least one field must match
+    }
+
+    # Add filters if provided
+    if filter_config:
+        from hybridrag.enhancements.filters import build_atlas_search_filters
+
+        filters = build_atlas_search_filters(filter_config)
+        if filters:
+            compound_query["filter"] = filters
+
+    pipeline: list[dict[str, Any]] = [
+        {
+            "$search": {
+                "index": config.text_index_name,
+                "compound": compound_query,
+            }
+        },
+        {"$limit": top_k * 2},
+    ]
+
+    # Add lookup and projection
+    if config.enable_document_lookup and db is not None:
+        pipeline.extend(
+            [
+                {
+                    "$lookup": {
+                        "from": config.documents_collection,
+                        "localField": "document_id",
+                        "foreignField": "_id",
+                        "as": "document_info",
+                    }
+                },
+                {
+                    "$unwind": {
+                        "path": "$document_info",
+                        "preserveNullAndEmptyArrays": True,
+                    }
+                },
+            ]
+        )
+
+    pipeline.append(
+        {
+            "$project": {
+                "chunk_id": "$_id",
+                "document_id": 1,
+                "content": 1,
+                "similarity": {"$meta": "searchScore"},
+                "metadata": 1,
+                "document_title": {"$ifNull": ["$document_info.title", ""]},
+                "document_source": {"$ifNull": ["$document_info.source", ""]},
+            }
+        }
+    )
+
+    try:
+        cursor = await collection.aggregate(pipeline, allowDiskUse=True)
+        results = await cursor.to_list(length=None)
+
+        search_results = [
+            SearchResult(
+                chunk_id=str(doc.get("chunk_id", "")),
+                document_id=str(doc.get("document_id", "")),
+                content=doc.get("content", ""),
+                similarity=doc.get("similarity", 0.0),
+                metadata=doc.get("metadata", {}),
+                document_title=doc.get("document_title", ""),
+                document_source=doc.get("document_source", ""),
+                search_type="text_multi_field_weighted",
+            )
+            for doc in results
+        ]
+
+        logger.info(
+            f"[MULTI_FIELD_SEARCH] Completed: query='{query_text[:50]}...', "
+            f"fields={list(config.text_search_path_weights.keys())}, "
+            f"results={len(search_results)}"
+        )
+
+        return search_results
+
+    except Exception as e:
+        logger.error(f"[MULTI_FIELD_SEARCH] Failed: {e}")
+        # Fallback to simple text search
+        return await text_only_search(
+            collection, query_text, top_k, config, db, filter_config
+        )
+
+
 async def text_only_search(
     collection: AsyncCollection,
     query_text: str,

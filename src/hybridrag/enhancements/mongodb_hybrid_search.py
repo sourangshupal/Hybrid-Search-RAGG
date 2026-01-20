@@ -465,12 +465,13 @@ async def hybrid_search_with_score_fusion(
     )
 
     # Build the score fusion pipeline
+    # Reference: https://www.mongodb.com/docs/manual/reference/operator/aggregation/scoreFusion/
     pipeline = [
         {
             "$scoreFusion": {
                 "input": {
                     "pipelines": {
-                        # Pipeline 1: Vector search with sigmoid normalization
+                        # Pipeline 1: Vector search
                         "vector": [
                             {
                                 "$vectorSearch": {
@@ -482,7 +483,7 @@ async def hybrid_search_with_score_fusion(
                                 }
                             }
                         ],
-                        # Pipeline 2: Full-text search with sigmoid normalization
+                        # Pipeline 2: Full-text search
                         "text": [
                             {
                                 "$search": {
@@ -495,19 +496,18 @@ async def hybrid_search_with_score_fusion(
                             },
                             {"$limit": top_k * 2},
                         ],
-                    }
+                    },
+                    # Sigmoid normalization for score scaling (must be inside input)
+                    "normalization": "sigmoid",
                 },
                 "combination": {
-                    # Weighted sum with custom expression
+                    # Weighted combination
                     "weights": {
                         "vector": config.vector_weight,
                         "text": config.text_weight,
                     }
                 },
-                "normalization": {
-                    # Sigmoid normalization for score scaling
-                    "sigmoid": {}
-                },
+                "scoreDetails": True,
             }
         },
         {"$addFields": {"fusion_score": {"$meta": "scoreFusionScore"}}},

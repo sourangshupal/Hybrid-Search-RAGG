@@ -32,7 +32,7 @@ env/
 *~
 
 # Testing
-tests/
+# tests/  # Uncommenting to include E2E tests
 .pytest_cache/
 .coverage
 .coverage.*

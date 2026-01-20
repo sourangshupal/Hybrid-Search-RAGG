@@ -10,6 +10,7 @@ Production-ready API with:
 
 from __future__ import annotations
 
+import os
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING
 
@@ -68,13 +69,17 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # CORS middleware
+    # CORS middleware - configure allowed origins from environment
+    # Default to localhost for development; set CORS_ORIGINS in production
+    cors_origins = os.environ.get("CORS_ORIGINS", "http://localhost:3000,http://localhost:8000")
+    allowed_origins = [origin.strip() for origin in cors_origins.split(",") if origin.strip()]
+
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=allowed_origins,
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
     )
 
     # Register routes

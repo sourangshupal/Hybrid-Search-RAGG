@@ -163,17 +163,24 @@ class TestBuildGraphLookupPipeline:
         assert graph_lookup["maxDepth"] == 2
 
     def test_entity_normalization_in_pipeline(self) -> None:
-        """Entity name should be normalized in match stage."""
+        """Entity name should use case-insensitive regex in match stage."""
+        import re
+
         config = GraphTraversalConfig()
         pipeline = build_graph_lookup_pipeline("  MongoDB  ", config)
 
-        # First stage match should have $or with normalized name
+        # First stage match should have $or with regex for case-insensitive matching
         match_stage = pipeline[0]["$match"]
         # Match uses $or for source or target
         assert "$or" in match_stage
-        # Check normalized entity in first condition
+        # Check regex pattern in first condition (case-insensitive)
         conditions = match_stage["$or"]
-        assert conditions[0]["source_node_id"] == "mongodb"
+        source_condition = conditions[0]["source_node_id"]
+        assert "$regex" in source_condition
+        # The regex should be case-insensitive and match "MongoDB" (stripped)
+        regex_pattern = source_condition["$regex"]
+        assert isinstance(regex_pattern, re.Pattern)
+        assert regex_pattern.flags & re.IGNORECASE
 
 
 class TestGraphSearchIntegration:

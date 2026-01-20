@@ -113,7 +113,7 @@ def build_graph_lookup_pipeline(
     Build bidirectional $graphLookup aggregation pipeline.
 
     Creates a pipeline that:
-    1. Matches edges where the entity is source or target
+    1. Matches edges where the entity is source or target (case-insensitive)
     2. Traverses outbound edges (source -> target)
     3. Collects related entities with depth info
 
@@ -124,7 +124,9 @@ def build_graph_lookup_pipeline(
     Returns:
         MongoDB aggregation pipeline stages
     """
-    normalized_entity = normalize_entity_name(entity_name)
+    # Use case-insensitive regex for matching (handles varied casing in data)
+    escaped_entity = escape_regex(entity_name.strip())
+    entity_regex = re.compile(f"^{escaped_entity}$", re.IGNORECASE)
 
     # Get collection name with workspace prefix
     edges_collection = (
@@ -134,12 +136,12 @@ def build_graph_lookup_pipeline(
     )
 
     pipeline: list[dict[str, Any]] = [
-        # Stage 1: Find edges where this entity is source or target
+        # Stage 1: Find edges where this entity is source or target (case-insensitive)
         {
             "$match": {
                 "$or": [
-                    {config.source_field: normalized_entity},
-                    {config.target_field: normalized_entity},
+                    {config.source_field: {"$regex": entity_regex}},
+                    {config.target_field: {"$regex": entity_regex}},
                 ],
             },
         },
@@ -213,7 +215,7 @@ async def graph_traversal(
     pipeline = build_graph_lookup_pipeline(entity_name, config)
 
     try:
-        cursor = await collection.aggregate(pipeline, allowDiskUse=True)
+        cursor = collection.aggregate(pipeline, allowDiskUse=True)
         results = await cursor.to_list(length=None)
 
         # Collect unique entities and edges
@@ -394,7 +396,7 @@ async def get_chunks_for_entities(
     ]
 
     try:
-        cursor = await collection.aggregate(pipeline, allowDiskUse=True)
+        cursor = collection.aggregate(pipeline, allowDiskUse=True)
         results = await cursor.to_list(length=None)
 
         logger.info(

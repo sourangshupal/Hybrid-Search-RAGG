@@ -453,89 +453,91 @@ class HybridRAG:
         from motor.motor_asyncio import AsyncIOMotorClient
 
         client = AsyncIOMotorClient(self.settings.mongodb_uri.get_secret_value())
-        db = client[self.settings.mongodb_database]
+        try:
+            db = client[self.settings.mongodb_database]
 
-        # Create embedding function wrapper for the pipeline
-        def pipeline_embed_func(texts: list[str]) -> list[list[float]]:
-            """Wrapper to use HybridRAG's embedding function."""
-            from ..integrations.voyage import VoyageEmbedder
+            # Create embedding function wrapper for the pipeline
+            def pipeline_embed_func(texts: list[str]) -> list[list[float]]:
+                """Wrapper to use HybridRAG's embedding function."""
+                from ..integrations.voyage import VoyageEmbedder
 
-            # Create embedder instance
-            embedder = VoyageEmbedder(
-                api_key=self.settings.voyage_api_key.get_secret_value(),
-                embedding_model=self.settings.voyage_embedding_model,
-                batch_size=64,  # Reduced from default to avoid 120k token limit per batch
-            )
-            
-            # Use sync embedding method as this runs in a thread
-            result = embedder.embed_sync(texts, input_type="document")
-            return result.tolist() if hasattr(result, "tolist") else list(result)
-
-        # Use default config if not provided
-        if config is None:
-            config = IngestionConfig(
-                chunking=ChunkingConfig(
-                    max_tokens=512,
-                    chunk_size=1000,
-                    chunk_overlap=200,
-                    tokenizer_model="sentence-transformers/all-MiniLM-L6-v2",
-                ),
-                clean_before_ingest=False,  # Don't clean by default
-                batch_size=self.settings.embedding_batch_size,
-                enable_audio_transcription=True,
-            )
-
-        # Create and run the ingestion pipeline
-        pipeline = DocumentIngestionPipeline(
-            db=db,
-            embedding_func=pipeline_embed_func,
-            config=config,
-            documents_collection="ingested_documents",
-            chunks_collection="ingested_chunks",
-        )
-
-        import time as _time
-        start_time = _time.time()
-
-        results = await pipeline.ingest_folder(folder_path, progress_callback)
-
-        duration = _time.time() - start_time
-
-        # Summary statistics
-        total_docs = len(results)
-        successful = sum(1 for r in results if r.success)
-        total_chunks = sum(r.chunks_created for r in results)
-        total_errors = sum(len(r.errors) for r in results)
-
-        logger.info(f"[INGEST_FILES] ========== File Ingestion Complete ==========")
-        logger.info(f"[INGEST_FILES] Documents: {successful}/{total_docs} successful")
-        logger.info(f"[INGEST_FILES] Total chunks: {total_chunks}")
-        logger.info(f"[INGEST_FILES] Duration: {duration:.2f}s")
-        if total_errors > 0:
-            logger.warning(f"[INGEST_FILES] Errors: {total_errors}")
-
-        # Now insert the chunks into the main RAG system for KG extraction
-        # Read back the chunks from MongoDB and insert them
-        if successful > 0:
-            logger.info("[INGEST_FILES] Inserting chunks into RAG for KG extraction...")
-            chunks_col = db["ingested_chunks"]
-            cursor = chunks_col.find({})
-            chunks_data = await cursor.to_list(length=None)
-
-            if chunks_data:
-                # Extract content and file paths for RAG insertion
-                contents = [c["content"] for c in chunks_data]
-                file_paths = [c.get("metadata", {}).get("source", "unknown") for c in chunks_data]
-
-                # Insert into main RAG (this builds the knowledge graph)
-                await self.insert(
-                    documents=contents,
-                    file_paths=file_paths,
+                # Create embedder instance
+                embedder = VoyageEmbedder(
+                    api_key=self.settings.voyage_api_key.get_secret_value(),
+                    embedding_model=self.settings.voyage_embedding_model,
+                    batch_size=64,  # Reduced from default to avoid 120k token limit per batch
                 )
-                logger.info(f"[INGEST_FILES] Inserted {len(contents)} chunks into RAG system")
 
-        # Close the motor client
-        client.close()
+                # Use sync embedding method as this runs in a thread
+                result = embedder.embed_sync(texts, input_type="document")
+                return result.tolist() if hasattr(result, "tolist") else list(result)
+
+            # Use default config if not provided
+            if config is None:
+                config = IngestionConfig(
+                    chunking=ChunkingConfig(
+                        max_tokens=512,
+                        chunk_size=1000,
+                        chunk_overlap=200,
+                        tokenizer_model="sentence-transformers/all-MiniLM-L6-v2",
+                    ),
+                    clean_before_ingest=False,  # Don't clean by default
+                    batch_size=self.settings.embedding_batch_size,
+                    enable_audio_transcription=True,
+                )
+
+            # Create and run the ingestion pipeline
+            pipeline = DocumentIngestionPipeline(
+                db=db,
+                embedding_func=pipeline_embed_func,
+                config=config,
+                documents_collection="ingested_documents",
+                chunks_collection="ingested_chunks",
+            )
+
+            import time as _time
+            start_time = _time.time()
+
+            results = await pipeline.ingest_folder(folder_path, progress_callback)
+
+            duration = _time.time() - start_time
+
+            # Summary statistics
+            total_docs = len(results)
+            successful = sum(1 for r in results if r.success)
+            total_chunks = sum(r.chunks_created for r in results)
+            total_errors = sum(len(r.errors) for r in results)
+
+            logger.info(f"[INGEST_FILES] ========== File Ingestion Complete ==========")
+            logger.info(f"[INGEST_FILES] Documents: {successful}/{total_docs} successful")
+            logger.info(f"[INGEST_FILES] Total chunks: {total_chunks}")
+            logger.info(f"[INGEST_FILES] Duration: {duration:.2f}s")
+            if total_errors > 0:
+                logger.warning(f"[INGEST_FILES] Errors: {total_errors}")
+
+            # Now insert the chunks into the main RAG system for KG extraction
+            # Read back the chunks from MongoDB and insert them
+            if successful > 0:
+                logger.info("[INGEST_FILES] Inserting chunks into RAG for KG extraction...")
+                chunks_col = db["ingested_chunks"]
+                cursor = chunks_col.find({})
+                chunks_data = await cursor.to_list(length=None)
+
+                if chunks_data:
+                    # Extract content and file paths for RAG insertion
+                    contents = [c["content"] for c in chunks_data]
+                    file_paths = [c.get("metadata", {}).get("source", "unknown") for c in chunks_data]
+
+                    # Insert into main RAG (this builds the knowledge graph)
+                    await self.insert(
+                        documents=contents,
+                        file_paths=file_paths,
+                    )
+                    logger.info(f"[INGEST_FILES] Inserted {len(contents)} chunks into RAG system")
+
+        finally:
+            # Always close the motor client to prevent connection leaks
+            client.close()
 
         # Log to Langfuse if enabled
         if langfuse_enabled():

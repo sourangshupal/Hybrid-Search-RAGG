@@ -248,6 +248,7 @@ async def hybrid_search_with_rank_fusion(
     config: MongoDBHybridSearchConfig | None = None,
     vector_filter_config: VectorSearchFilterConfig | None = None,
     atlas_filter_config: AtlasSearchFilterConfig | None = None,
+    lexical_filter_config: LexicalPrefilterConfig | None = None,
 ) -> list[dict[str, Any]]:
     """
     Perform hybrid search using MongoDB's $rankFusion.
@@ -293,21 +294,49 @@ async def hybrid_search_with_rank_fusion(
     )
 
     # Build vector search stage
-    vector_search_stage: dict[str, Any] = {
-        "index": config.vector_index_name,
-        "path": config.vector_path,
-        "queryVector": query_vector,
-        "numCandidates": num_candidates,
-        "limit": top_k * 2,
-    }
+    # Choose between $search.vectorSearch (MongoDB 8.2+) or $vectorSearch (legacy)
+    if config.use_lexical_prefilters and lexical_filter_config:
+        # Use NEW $search.vectorSearch with lexical prefilters
+        from hybridrag.enhancements.filters import build_lexical_prefilters
 
-    # Add vector prefilters if provided
-    if vector_filter_config:
-        from hybridrag.enhancements.filters import build_vector_search_filters
+        lexical_filters = build_lexical_prefilters(lexical_filter_config)
 
-        vector_filters = build_vector_search_filters(vector_filter_config)
-        if vector_filters:
-            vector_search_stage["filter"] = vector_filters
+        vector_pipeline_stage: dict[str, Any] = {
+            "$search": {
+                "index": config.lexical_prefilter_index or config.vector_index_name,
+                "vectorSearch": {
+                    "queryVector": query_vector,
+                    "path": config.vector_path,
+                    "numCandidates": num_candidates,
+                    "limit": top_k * 2,
+                },
+            }
+        }
+
+        if lexical_filters:
+            vector_pipeline_stage["$search"]["vectorSearch"]["filter"] = lexical_filters
+
+        vector_pipeline = [vector_pipeline_stage]
+        logger.info("[HYBRID_SEARCH] Using $search.vectorSearch with lexical prefilters")
+    else:
+        # Use legacy $vectorSearch with MQL filters
+        vector_search_stage: dict[str, Any] = {
+            "index": config.vector_index_name,
+            "path": config.vector_path,
+            "queryVector": query_vector,
+            "numCandidates": num_candidates,
+            "limit": top_k * 2,
+        }
+
+        # Add vector prefilters if provided
+        if vector_filter_config:
+            from hybridrag.enhancements.filters import build_vector_search_filters
+
+            vector_filters = build_vector_search_filters(vector_filter_config)
+            if vector_filters:
+                vector_search_stage["filter"] = vector_filters
+
+        vector_pipeline = [{"$vectorSearch": vector_search_stage}]
 
     # Build text search stage with compound query
     text_clause: dict[str, Any] = {
@@ -338,7 +367,7 @@ async def hybrid_search_with_rank_fusion(
             "$rankFusion": {
                 "input": {
                     "pipelines": {
-                        "vector": [{"$vectorSearch": vector_search_stage}],
+                        "vector": vector_pipeline,  # Use the built vector pipeline
                         "text": [
                             {
                                 "$search": {

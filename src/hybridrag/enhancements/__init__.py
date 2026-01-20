@@ -12,11 +12,19 @@ Advanced RAG capabilities:
 """
 
 from .entity_boosting import EntityBoostingReranker, create_boosted_rerank_func
-from .query_optimizer import QueryOptimizer, OptimizedQueryParams
 from .filters import (
     AtlasSearchFilterConfig,
+    FuzzyFilter,
+    GeoFilter,
+    LexicalPrefilterConfig,
+    PhraseFilter,
+    QueryStringFilter,
+    TextFilter,
     VectorSearchFilterConfig,
+    WildcardFilter,
     build_atlas_search_filters,
+    build_lexical_prefilters,
+    build_search_vector_search_stage,
     build_vector_search_filters,
 )
 from .graph_search import (
@@ -53,7 +61,9 @@ from .mongodb_hybrid_search import (
     reciprocal_rank_fusion,
     text_only_search,
     vector_only_search,
+    vector_search_with_lexical_prefilters,
 )
+from .query_optimizer import OptimizedQueryParams, QueryOptimizer
 
 __all__ = [
     # Entity Boosting
@@ -83,6 +93,7 @@ __all__ = [
     "MongoDBHybridSearchConfig",
     "VectorSearchFilterConfig",
     "AtlasSearchFilterConfig",
+    "LexicalPrefilterConfig",
     # Searcher
     "MongoDBHybridSearcher",
     "create_hybrid_searcher",
@@ -93,6 +104,7 @@ __all__ = [
     "multi_field_text_search",
     "text_only_search",
     "vector_only_search",
+    "vector_search_with_lexical_prefilters",
     # Utilities
     "reciprocal_rank_fusion",
     "SearchResult",
@@ -104,4 +116,13 @@ __all__ = [
     # Filter builders
     "build_vector_search_filters",
     "build_atlas_search_filters",
+    "build_lexical_prefilters",
+    "build_search_vector_search_stage",
+    # Filter types
+    "TextFilter",
+    "FuzzyFilter",
+    "PhraseFilter",
+    "WildcardFilter",
+    "GeoFilter",
+    "QueryStringFilter",
 ]

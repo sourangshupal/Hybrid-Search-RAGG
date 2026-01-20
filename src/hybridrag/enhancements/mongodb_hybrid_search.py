@@ -138,9 +138,8 @@ class MongoDBHybridSearchConfig:
     # Vector search settings
     vector_index_name: str = "vector_knn_index"
     vector_path: str = "vector"
-    # DEPRECATED: Use NUM_CANDIDATES_MULTIPLIER * top_k instead (dynamic)
-    # Only used as fallback if explicit numCandidates not provided
-    vector_num_candidates: int | None = None  # None = use dynamic calculation
+    # Optional explicit numCandidates override; None = dynamic calculation (top_k * NUM_CANDIDATES_MULTIPLIER)
+    vector_num_candidates: int | None = None
 
     # Full-text search settings
     text_index_name: str = "text_search_index"

@@ -184,19 +184,26 @@ class TestBuildGraphLookupPipeline:
 
 
 class TestGraphSearchIntegration:
-    """Integration tests (require MongoDB connection)."""
+    """Integration tests (require MongoDB connection).
 
-    @pytest.mark.skip(reason="Requires MongoDB connection")
+    These tests are skipped by default as they require a live MongoDB connection.
+    To run them, set MONGODB_URI environment variable and remove the skip decorators.
+    """
+
+    @pytest.mark.skip(reason="Requires MongoDB connection - set MONGODB_URI to run")
     async def test_graph_traversal_execution(self) -> None:
-        """Test actual graph traversal execution."""
-        pass
+        """Test actual graph traversal execution with MongoDB."""
+        # Integration test placeholder - implement with MongoDB connection
+        pytest.skip("Not implemented - requires MongoDB test infrastructure")
 
-    @pytest.mark.skip(reason="Requires MongoDB connection")
+    @pytest.mark.skip(reason="Requires MongoDB connection - set MONGODB_URI to run")
     async def test_expand_entities_via_graph(self) -> None:
-        """Test entity expansion via graph."""
-        pass
+        """Test entity expansion via graph traversal."""
+        # Integration test placeholder - implement with MongoDB connection
+        pytest.skip("Not implemented - requires MongoDB test infrastructure")
 
-    @pytest.mark.skip(reason="Requires MongoDB connection")
+    @pytest.mark.skip(reason="Requires MongoDB connection - set MONGODB_URI to run")
     async def test_get_chunks_for_entities(self) -> None:
-        """Test chunk retrieval for entities."""
-        pass
+        """Test chunk retrieval for entities from graph."""
+        # Integration test placeholder - implement with MongoDB connection
+        pytest.skip("Not implemented - requires MongoDB test infrastructure")

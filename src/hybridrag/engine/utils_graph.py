@@ -647,7 +647,6 @@ async def aedit_entity(
                             relationships_vdb,
                             [entity_name],
                             new_entity_name,
-                            merge_strategy=None,
                             target_entity_data=None,
                             entity_chunks_storage=entity_chunks_storage,
                             relation_chunks_storage=relation_chunks_storage,
@@ -1166,7 +1165,6 @@ async def _merge_entities_impl(
     source_entities: list[str],
     target_entity: str,
     *,
-    merge_strategy: dict[str, str] = None,
     target_entity_data: dict[str, Any] = None,
     entity_chunks_storage=None,
     relation_chunks_storage=None,
@@ -1182,7 +1180,6 @@ async def _merge_entities_impl(
         relationships_vdb: Vector database storage for relationships
         source_entities: List of source entity names to merge
         target_entity: Name of the target entity after merging
-        merge_strategy: Deprecated. Merge strategy for each field (optional)
         target_entity_data: Dictionary of specific values to set for target entity (optional)
         entity_chunks_storage: Optional KV storage for tracking chunks
         relation_chunks_storage: Optional KV storage for tracking relation chunks
@@ -1194,22 +1191,13 @@ async def _merge_entities_impl(
         Caller must acquire appropriate locks before calling this function.
         All source entities and the target entity should be locked together.
     """
-    # Default merge strategy for entities
-    default_entity_merge_strategy = {
+    # Default merge strategy for entities (concatenate descriptions, join unique IDs)
+    effective_entity_merge_strategy = {
         "description": "concatenate",
         "entity_type": "keep_first",
         "source_id": "join_unique",
         "file_path": "join_unique",
     }
-    effective_entity_merge_strategy = default_entity_merge_strategy
-    if merge_strategy:
-        logger.warning(
-            "Entity Merge: merge_strategy parameter is deprecated and will be ignored in a future release."
-        )
-        effective_entity_merge_strategy = {
-            **default_entity_merge_strategy,
-            **merge_strategy,
-        }
     target_entity_data = {} if target_entity_data is None else target_entity_data
 
     # 1. Check if all source entities exist
@@ -1531,7 +1519,6 @@ async def amerge_entities(
     relationships_vdb,
     source_entities: list[str],
     target_entity: str,
-    merge_strategy: dict[str, str] = None,
     target_entity_data: dict[str, Any] = None,
     entity_chunks_storage=None,
     relation_chunks_storage=None,
@@ -1548,8 +1535,6 @@ async def amerge_entities(
         relationships_vdb: Vector database storage for relationships
         source_entities: List of source entity names to merge
         target_entity: Name of the target entity after merging
-        merge_strategy: Deprecated (Each field uses its own default strategy). If provided,
-            customizations are applied but a warning is logged.
         target_entity_data: Dictionary of specific values to set for the target entity,
             overriding any merged values, e.g. {"description": "custom description", "entity_type": "PERSON"}
         entity_chunks_storage: Optional KV storage for tracking chunks that reference entities
@@ -1575,7 +1560,6 @@ async def amerge_entities(
                 relationships_vdb,
                 source_entities,
                 target_entity,
-                merge_strategy=merge_strategy,
                 target_entity_data=target_entity_data,
                 entity_chunks_storage=entity_chunks_storage,
                 relation_chunks_storage=relation_chunks_storage,

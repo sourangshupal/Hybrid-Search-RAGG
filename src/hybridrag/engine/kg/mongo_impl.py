@@ -786,6 +786,10 @@ class MongoGraphStorage(BaseGraphStorage):
             # Create Atlas Search index for better search performance if possible
             await self.create_search_index_if_not_exists()
 
+            # Create indexes on edge collection for $graphLookup and query performance
+            # These indexes are CRITICAL for graph traversal operations
+            await self._create_edge_indexes_if_not_exists()
+
             logger.debug(
                 f"[{self.workspace}] Use MongoDB as KG {self._collection_name}"
             )
@@ -1959,6 +1963,71 @@ class MongoGraphStorage(BaseGraphStorage):
         logger.info(
             f"[{self.workspace}] Index will be built asynchronously, using regex fallback until ready."
         )
+
+    async def _create_edge_indexes_if_not_exists(self):
+        """Create indexes on edge collection for optimal $graphLookup and query performance.
+
+        These indexes are CRITICAL for:
+        - $graphLookup operations (connectFromField/connectToField)
+        - Edge queries using source_node_id and target_node_id
+        - Bidirectional graph traversal
+
+        Per MongoDB best practices (Rule 3.4): Always index $lookup foreign fields.
+        """
+        try:
+            # Get existing indexes
+            indexes_cursor = await self.edge_collection.list_indexes()
+            existing_indexes = await indexes_cursor.to_list(length=None)
+            existing_index_names = {idx.get("name", "") for idx in existing_indexes}
+
+            # Define edge indexes with workspace prefix for isolation
+            workspace_prefix = f"{self.workspace}_" if self.workspace else ""
+
+            edge_indexes = [
+                # Single field indexes for $graphLookup connectToField/connectFromField
+                {
+                    "name": f"{workspace_prefix}edge_source_node_id",
+                    "keys": [("source_node_id", 1)],
+                },
+                {
+                    "name": f"{workspace_prefix}edge_target_node_id",
+                    "keys": [("target_node_id", 1)],
+                },
+                # Compound index for bidirectional edge lookups (covers has_edge, get_edge)
+                {
+                    "name": f"{workspace_prefix}edge_source_target",
+                    "keys": [("source_node_id", 1), ("target_node_id", 1)],
+                },
+                # Index for weight-based sorting in graph traversal
+                {
+                    "name": f"{workspace_prefix}edge_weight",
+                    "keys": [("weight", -1)],
+                },
+            ]
+
+            for index_info in edge_indexes:
+                index_name = index_info["name"]
+                if index_name not in existing_index_names:
+                    try:
+                        await self.edge_collection.create_index(
+                            index_info["keys"], name=index_name
+                        )
+                        logger.debug(
+                            f"[{self.workspace}] Created edge index '{index_name}' for {self._edge_collection_name}"
+                        )
+                    except PyMongoError as create_error:
+                        logger.warning(
+                            f"[{self.workspace}] Failed to create edge index '{index_name}': {create_error}"
+                        )
+                else:
+                    logger.debug(
+                        f"[{self.workspace}] Edge index '{index_name}' already exists"
+                    )
+
+        except PyMongoError as e:
+            logger.warning(
+                f"[{self.workspace}] Error creating edge indexes for {self._edge_collection_name}: {e}"
+            )
 
     async def create_search_index_if_not_exists(self):
         """Creates an improved Atlas Search index for entity search, rebuilding if necessary."""

@@ -52,8 +52,7 @@ dependencies = [
     "openai>=1.0.0",
 
     # Google Gemini
-    "google-genai>=0.2.0",  # New unified SDK (2026 standard)
-    "google-generativeai>=0.8.0",  # Deprecated - kept temporarily for backward compatibility
+    "google-genai>=0.2.0",
 
     # MongoDB
     "pymongo>=4.6.0",

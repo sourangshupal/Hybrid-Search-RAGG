@@ -463,6 +463,7 @@ class MixModeSearcher:
         top_k: int = 10,
         query_entities: list[str] | None = None,
         collection_name: str = "text_chunks",
+        lexical_filter_config: LexicalPrefilterConfig | None = None,
     ) -> list[MixModeSearchResult]:
         """
         Execute mix mode search.
@@ -473,6 +474,7 @@ class MixModeSearcher:
             top_k: Number of results
             query_entities: Entities extracted from query
             collection_name: Name of chunks collection
+            lexical_filter_config: Lexical prefilter configuration (MongoDB 8.2+)
 
         Returns:
             List of MixModeSearchResult
@@ -485,6 +487,7 @@ class MixModeSearcher:
             config=self.config,
             query_entities=query_entities,
             collection_name=collection_name,
+            lexical_filter_config=lexical_filter_config,
         )
 
     async def search_with_graph_only(

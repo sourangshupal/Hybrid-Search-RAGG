@@ -40,13 +40,13 @@ help: ## Show this help message
 	@echo "  make $(YELLOW)<target>$(NC)"
 	@echo ""
 	@echo "$(GREEN)Setup & Install:$(NC)"
-	@grep -E '^(setup|install|install-dev|install-all):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-15s$(NC) %s\n", $$1, $$2}'
+	@grep -E '^(setup|install|install-dev|install-all|first-time-setup):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-18s$(NC) %s\n", $$1, $$2}'
 	@echo ""
 	@echo "$(GREEN)Development:$(NC)"
-	@grep -E '^(dev|run-api|run-ui|run-cli):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-15s$(NC) %s\n", $$1, $$2}'
+	@grep -E '^(dev|run-api|run-ui|run-cli|notebooks):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-18s$(NC) %s\n", $$1, $$2}'
 	@echo ""
 	@echo "$(GREEN)Testing & Quality:$(NC)"
-	@grep -E '^(test|lint|format|typecheck):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-15s$(NC) %s\n", $$1, $$2}'
+	@grep -E '^(test|test-cov|test-quick|benchmark|benchmark-save|lint|format|typecheck):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-18s$(NC) %s\n", $$1, $$2}'
 	@echo ""
 	@echo "$(GREEN)Build & Deploy:$(NC)"
 	@grep -E '^(build|docker|clean):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-15s$(NC) %s\n", $$1, $$2}'
@@ -88,6 +88,36 @@ install-dev: ## Install with development tools
 install-all: ## Install all dependencies (including optional)
 	@$(PIP) install -e ".[all]"
 
+first-time-setup: ## Complete setup for new developers
+	@echo "$(BLUE)First-time HybridRAG setup...$(NC)"
+	@echo ""
+	@echo "$(GREEN)Step 1/5: Running setup.sh$(NC)"
+	@./setup.sh --all || true
+	@echo ""
+	@echo "$(GREEN)Step 2/5: Installing pre-commit$(NC)"
+	@$(PIP) install pre-commit
+	@$(VENV)/bin/pre-commit install
+	@echo "$(GREEN)Pre-commit hooks installed$(NC)"
+	@echo ""
+	@echo "$(GREEN)Step 3/5: Installing Jupyter Lab$(NC)"
+	@$(PIP) install jupyterlab ipykernel
+	@echo ""
+	@echo "$(GREEN)Step 4/5: Checking MongoDB connection$(NC)"
+	@make atlas-check || echo "$(YELLOW)MongoDB not configured yet - edit .env$(NC)"
+	@echo ""
+	@echo "$(GREEN)Step 5/5: Running quick test$(NC)"
+	@make test-quick || echo "$(YELLOW)Tests not passing yet$(NC)"
+	@echo ""
+	@echo "$(GREEN)========================================$(NC)"
+	@echo "$(GREEN)Setup complete!$(NC)"
+	@echo ""
+	@echo "$(BLUE)Next steps:$(NC)"
+	@echo "  1. Edit $(YELLOW).env$(NC) with your API keys"
+	@echo "  2. Run $(YELLOW)make notebooks$(NC) to explore examples"
+	@echo "  3. Run $(YELLOW)make dev$(NC) to verify installation"
+	@echo "$(GREEN)========================================$(NC)"
+	@echo ""
+
 #---------------------------------------------------------------------------
 # Development
 #---------------------------------------------------------------------------
@@ -112,6 +142,11 @@ run-ui: ## Start the Chainlit UI
 run-cli: ## Run the HybridRAG CLI
 	@$(VENV)/bin/hybridrag
 
+notebooks: ## Start Jupyter Lab with examples
+	@echo "$(BLUE)Starting Jupyter Lab...$(NC)"
+	@echo "$(GREEN)Opening notebooks directory$(NC)"
+	@$(VENV)/bin/jupyter lab notebooks/
+
 #---------------------------------------------------------------------------
 # Testing & Quality
 #---------------------------------------------------------------------------
@@ -127,6 +162,15 @@ test-cov: ## Run tests with coverage report
 
 test-quick: ## Run fast unit tests only
 	@$(PYTEST) tests/enhancements/ -v
+
+benchmark: ## Run performance benchmarks
+	@echo "$(BLUE)Running benchmarks...$(NC)"
+	@$(PYTEST) tests/benchmarks/ -v -m benchmark --benchmark-only || echo "$(YELLOW)No benchmarks found yet$(NC)"
+
+benchmark-save: ## Run and save benchmark baseline
+	@echo "$(BLUE)Running and saving benchmark baseline...$(NC)"
+	@$(PYTEST) tests/benchmarks/ -v -m benchmark --benchmark-save=baseline || echo "$(YELLOW)No benchmarks found yet$(NC)"
+	@echo "$(GREEN)Baseline saved! Compare with: pytest --benchmark-compare$(NC)"
 
 lint: ## Run linting checks
 	@echo "$(BLUE)Running linters...$(NC)"

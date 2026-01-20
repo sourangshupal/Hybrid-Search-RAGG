@@ -8,9 +8,11 @@ Advanced RAG capabilities:
 - Graph Search: Knowledge graph traversal via $graphLookup
 - Mix Mode Search: Combines hybrid search + graph traversal + entity boosting
 - Filter Builders: MongoDB 8.2 vector search and Atlas Search prefiltering
+- Query Optimizer: Automatic parameter optimization based on query analysis
 """
 
 from .entity_boosting import EntityBoostingReranker, create_boosted_rerank_func
+from .query_optimizer import QueryOptimizer, OptimizedQueryParams
 from .filters import (
     AtlasSearchFilterConfig,
     VectorSearchFilterConfig,
@@ -59,6 +61,9 @@ __all__ = [
     "create_boosted_rerank_func",
     # Implicit Expansion
     "ImplicitExpander",
+    # Query Optimizer
+    "QueryOptimizer",
+    "OptimizedQueryParams",
     # Graph Search
     "GraphEdge",
     "GraphTraversalConfig",

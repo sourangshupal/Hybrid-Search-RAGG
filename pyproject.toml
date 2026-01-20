@@ -78,6 +78,7 @@ ui = [
 ]
 cli = [
     "rich>=13.0.0",
+    "typer>=0.9.0",
 ]
 ingestion = [
     "docling>=2.0.0",
@@ -165,6 +166,39 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
 addopts = "-v --tb=short"
+markers = [
+    "p1: high priority test cases (critical functionality)",
+    "p2: medium priority test cases (important features)",
+    "p3: low priority test cases (edge cases, nice-to-have)",
+    "integration: requires MongoDB connection and external services",
+    "benchmark: performance benchmark tests (excluded from regular runs)",
+]
+
+[tool.coverage.run]
+source = ["src/hybridrag"]
+omit = [
+    "*/tests/*",
+    "*/__pycache__/*",
+    "*/engine/api/*",
+    "*/.venv/*",
+]
+
+[tool.coverage.report]
+precision = 2
+show_missing = true
+fail_under = 60
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
+
+[tool.coverage.html]
+directory = "htmlcov"
+title = "HybridRAG Test Coverage Report"
 
 [tool.ruff]
 line-length = 88

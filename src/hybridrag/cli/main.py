@@ -124,7 +124,10 @@ def display_response(response: str) -> None:
     try:
         md = Markdown(response)
         console.print(md)
-    except Exception:
+    except Exception as e:
+        # Log markdown rendering failure but show raw response
+        import logging
+        logging.debug(f"Markdown rendering failed: {e}")
         console.print(response)
     console.print()
 

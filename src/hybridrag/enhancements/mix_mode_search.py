@@ -274,7 +274,12 @@ async def mix_mode_search(
         search_tasks.append(asyncio.create_task(run_graph_traversal()))
 
     # Wait for all searches to complete
-    await asyncio.gather(*search_tasks, return_exceptions=True)
+    gather_results = await asyncio.gather(*search_tasks, return_exceptions=True)
+
+    # Check for exceptions in parallel tasks
+    for i, result in enumerate(gather_results):
+        if isinstance(result, Exception):
+            logger.warning(f"[MIX_MODE] Search task {i} failed: {result}")
 
     # ============================================
     # Stage 3: Merge results

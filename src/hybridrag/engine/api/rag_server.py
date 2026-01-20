@@ -268,7 +268,7 @@ def check_frontend_build():
             ASCIIColors.cyan(
                 "Recommended: Rebuild the frontend to use the latest changes:"
             )
-        ASCIIColors.cyan("    cd webui")
+            ASCIIColors.cyan("    cd webui")
             ASCIIColors.cyan("    bun install --frozen-lockfile")
             ASCIIColors.cyan("    bun run build")
             ASCIIColors.cyan("    cd ..")

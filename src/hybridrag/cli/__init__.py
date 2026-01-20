@@ -1,12 +1,14 @@
 """
 HybridRAG CLI Module.
 
-Provides an interactive command-line interface for HybridRAG with:
-- Conversational RAG queries
+Provides both command-line and interactive interfaces for HybridRAG with:
+- Typer-based CLI commands (ingest, query, status, etc.)
+- Interactive conversational chat
 - Real-time streaming responses
 - Rich terminal UI
 """
 
-from .main import main, run_cli
+from .app import run as run_cli
+from .main import main, conversation_loop
 
-__all__ = ["main", "run_cli"]
+__all__ = ["run_cli", "main", "conversation_loop"]

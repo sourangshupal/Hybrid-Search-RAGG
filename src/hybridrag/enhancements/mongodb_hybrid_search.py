@@ -31,6 +31,7 @@ if TYPE_CHECKING:
 
     from hybridrag.enhancements.filters import (
         AtlasSearchFilterConfig,
+        LexicalPrefilterConfig,
         VectorSearchFilterConfig,
     )
 
@@ -1221,6 +1222,163 @@ async def vector_only_search(
 
     except Exception as e:
         logger.error(f"[VECTOR_SEARCH] Failed: {e}")
+        return []
+
+
+async def vector_search_with_lexical_prefilters(
+    collection: AsyncCollection,
+    query_vector: list[float],
+    top_k: int = 10,
+    config: MongoDBHybridSearchConfig | None = None,
+    db: AsyncDatabase | None = None,
+    lexical_filter_config: LexicalPrefilterConfig | None = None,
+) -> list[SearchResult]:
+    """
+    Perform vector search using MongoDB 8.2+ $search.vectorSearch with lexical prefilters.
+
+    NEW in MongoDB 8.2: Uses $search.vectorSearch instead of $vectorSearch.
+    This enables Atlas Search operators (text, fuzzy, phrase, wildcard, geo)
+    as prefilters, narrowing the candidate set BEFORE vector similarity.
+
+    Benefits over $vectorSearch:
+    - Complex text filtering (fuzzy, phrase, wildcard)
+    - Geospatial filtering
+    - QueryString (Lucene syntax) filtering
+    - Better performance for narrow result sets
+
+    Args:
+        collection: MongoDB collection with Atlas Search index
+        query_vector: The query embedding vector
+        top_k: Number of results to return
+        config: Search configuration
+        db: Database instance for $lookup (optional)
+        lexical_filter_config: Lexical prefilter configuration
+
+    Returns:
+        List of SearchResult objects ordered by vector similarity
+
+    Raises:
+        Falls back to vector_only_search if $search.vectorSearch unavailable
+    """
+    if config is None:
+        config = MongoDBHybridSearchConfig()
+
+    from hybridrag.enhancements.filters import (
+        LexicalPrefilterConfig,
+        build_search_vector_search_stage,
+    )
+
+    # Calculate dynamic numCandidates
+    num_candidates = (
+        config.vector_num_candidates
+        if config.vector_num_candidates is not None
+        else calculate_num_candidates(top_k)
+    )
+
+    # Build $search.vectorSearch stage
+    search_stage = build_search_vector_search_stage(
+        index_name=config.lexical_prefilter_index or config.vector_index_name,
+        query_vector=query_vector,
+        vector_path=config.vector_path,
+        limit=top_k,
+        num_candidates=num_candidates,
+        filter_config=lexical_filter_config,
+    )
+
+    # Build pipeline
+    pipeline: list[dict[str, Any]] = [search_stage]
+
+    # Add score extraction
+    pipeline.append(
+        {
+            "$addFields": {
+                "similarity": {"$meta": "vectorSearchScore"},
+            }
+        }
+    )
+
+    # Add $lookup for document metadata if enabled
+    if config.enable_document_lookup and db is not None:
+        pipeline.extend(
+            [
+                {
+                    "$lookup": {
+                        "from": config.documents_collection,
+                        "localField": "document_id",
+                        "foreignField": "_id",
+                        "as": "document_info",
+                    }
+                },
+                {
+                    "$unwind": {
+                        "path": "$document_info",
+                        "preserveNullAndEmptyArrays": True,
+                    }
+                },
+            ]
+        )
+
+    # Project final fields
+    pipeline.append(
+        {
+            "$project": {
+                "chunk_id": "$_id",
+                "document_id": 1,
+                "content": 1,
+                "similarity": 1,
+                "metadata": 1,
+                "document_title": {"$ifNull": ["$document_info.title", ""]},
+                "document_source": {"$ifNull": ["$document_info.source", ""]},
+                "vector": 0,
+            }
+        }
+    )
+
+    # Filter by cosine threshold
+    pipeline.append({"$match": {"similarity": {"$gte": config.cosine_threshold}}})
+
+    try:
+        cursor = await collection.aggregate(pipeline, allowDiskUse=True)
+        results = await cursor.to_list(length=None)
+
+        search_results = [
+            SearchResult(
+                chunk_id=str(doc.get("chunk_id", doc.get("_id", ""))),
+                document_id=str(doc.get("document_id", "")),
+                content=doc.get("content", ""),
+                similarity=doc.get("similarity", 0.0),
+                metadata=doc.get("metadata", {}),
+                document_title=doc.get("document_title", ""),
+                document_source=doc.get("document_source", ""),
+                search_type=(
+                    "vector_lexical_prefiltered"
+                    if lexical_filter_config
+                    else "vector_search_new"
+                ),
+            )
+            for doc in results
+        ]
+
+        logger.info(
+            f"[VECTOR_LEXICAL] Completed: results={len(search_results)}, "
+            f"threshold={config.cosine_threshold}, "
+            f"lexical_filtered={lexical_filter_config is not None}"
+        )
+
+        return search_results
+
+    except Exception as e:
+        # Check if error is due to unsupported $search.vectorSearch
+        error_str = str(e).lower()
+        if "vectorsearch" in error_str or "unknown" in error_str:
+            logger.warning(
+                f"[VECTOR_LEXICAL] $search.vectorSearch not supported, "
+                f"falling back to $vectorSearch: {e}"
+            )
+            # Fall back to traditional $vectorSearch
+            return await vector_only_search(collection, query_vector, top_k, config, db)
+
+        logger.error(f"[VECTOR_LEXICAL] Search failed: {e}")
         return []
 
 

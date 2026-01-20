@@ -2595,13 +2595,15 @@ def create_document_routes(
             logger.error(traceback.format_exc())
             raise HTTPException(status_code=500, detail=str(e))
 
-    # TODO: Deprecated, use /documents/paginated instead
     @router.get(
-        "", response_model=DocsStatusesResponse, dependencies=[Depends(combined_auth)]
+        "", response_model=DocsStatusesResponse, dependencies=[Depends(combined_auth)],
+        deprecated=True
     )
     async def documents() -> DocsStatusesResponse:
         """
-        Get the status of all documents in the system. This endpoint is deprecated; use /documents/paginated instead.
+        Get the status of all documents in the system.
+
+        **Deprecated:** Use /documents/paginated instead for better performance.
         To prevent excessive resource consumption, a maximum of 1,000 records is returned.
 
         This endpoint retrieves the current status of all documents, grouped by their

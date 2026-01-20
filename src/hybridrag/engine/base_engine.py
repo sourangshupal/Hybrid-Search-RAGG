@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import traceback
 import asyncio
-import configparser
 import inspect
 import os
 import time
@@ -121,10 +120,6 @@ from dotenv import load_dotenv
 # the OS environment variables take precedence over the .env file
 load_dotenv(dotenv_path=".env", override=False)
 
-# TODO: TO REMOVE @Yannick
-config = configparser.ConfigParser()
-config.read("config.ini", "utf-8")
-
 
 @final
 @dataclass
@@ -157,11 +152,6 @@ class BaseRAGEngine:
 
     workspace: str = field(default_factory=lambda: os.getenv("WORKSPACE", ""))
     """Workspace for data isolation. Defaults to empty string if WORKSPACE environment variable is not set."""
-
-    # Logging (Deprecated, use setup_logger in utils.py instead)
-    # ---
-    log_level: int | None = field(default=None)
-    log_file_path: str | None = field(default=None)
 
     # Query parameters
     # ---
@@ -429,9 +419,9 @@ class BaseRAGEngine:
     # Storages Management
     # ---
 
-    # TODO: Deprecated (BaseRAGEngine will never initialize storage automatically on creation，and finalize should be call before destroying)
     auto_manage_storages_states: bool = field(default=False)
-    """If True, engine will automatically calls initialize_storages and finalize_storages at the appropriate times."""
+    """If True, engine will automatically call initialize_storages and finalize_storages at appropriate times.
+    Note: Requires explicit calls to initialize_storages() and finalize_storages() for proper lifecycle management."""
 
     cosine_better_than_threshold: float = field(
         default=float(os.getenv("COSINE_THRESHOLD", 0.2))
@@ -446,26 +436,6 @@ class BaseRAGEngine:
         from .kg.shared_storage import (
             initialize_share_data,
         )
-
-        # Handle deprecated parameters
-        if self.log_level is not None:
-            warnings.warn(
-                "WARNING: log_level parameter is deprecated, use setup_logger in utils.py instead",
-                UserWarning,
-                stacklevel=2,
-            )
-        if self.log_file_path is not None:
-            warnings.warn(
-                "WARNING: log_file_path parameter is deprecated, use setup_logger in utils.py instead",
-                UserWarning,
-                stacklevel=2,
-            )
-
-        # Remove these attributes to prevent their use
-        if hasattr(self, "log_level"):
-            delattr(self, "log_level")
-        if hasattr(self, "log_file_path"):
-            delattr(self, "log_file_path")
 
         initialize_share_data()
 
@@ -1174,19 +1144,21 @@ class BaseRAGEngine:
 
         return track_id
 
-    # TODO: deprecated, use insert instead
     def insert_custom_chunks(
         self,
         full_text: str,
         text_chunks: list[str],
         doc_id: str | list[str] | None = None,
     ) -> None:
+        """Insert pre-chunked documents.
+
+        Note: Consider using insert() for automatic chunking and processing.
+        """
         loop = always_get_an_event_loop()
         loop.run_until_complete(
             self.ainsert_custom_chunks(full_text, text_chunks, doc_id)
         )
 
-    # TODO: deprecated, use ainsert instead
     async def ainsert_custom_chunks(
         self, full_text: str, text_chunks: list[str], doc_id: str | None = None
     ) -> None:

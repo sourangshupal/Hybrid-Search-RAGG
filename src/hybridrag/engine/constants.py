@@ -51,7 +51,7 @@ DEFAULT_COSINE_THRESHOLD = 0.2
 DEFAULT_RELATED_CHUNK_NUMBER = 5
 DEFAULT_KG_CHUNK_PICK_METHOD = "VECTOR"
 
-# TODO: Deprated. All conversation_history messages is send to LLM.
+# Number of conversation turns for context (all messages sent to LLM by default)
 DEFAULT_HISTORY_TURNS = 0
 
 # Rerank configuration defaults

@@ -37,6 +37,8 @@ from .mongodb_hybrid_search import (
 if TYPE_CHECKING:
     from pymongo.asynchronous.database import AsyncDatabase
 
+    from .filters import LexicalPrefilterConfig
+
 logger = logging.getLogger("hybridrag.mix_mode")
 
 
@@ -95,6 +97,10 @@ class MixModeConfig:
 
     # Entity-only result weight (for results found only via graph)
     entity_only_weight: float = 0.5
+
+    # Lexical prefiltering (MongoDB 8.2+)
+    use_lexical_prefilters: bool = False
+    default_lexical_prefilter: LexicalPrefilterConfig | None = None
 
 
 def extract_pipeline_score(

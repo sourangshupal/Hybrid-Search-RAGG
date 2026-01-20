@@ -52,6 +52,20 @@ from .enhancements.mongodb_hybrid_search import (
     MongoDBHybridSearchConfig,
     manual_hybrid_search_with_rrf,
     reciprocal_rank_fusion,
+    vector_search_with_lexical_prefilters,
+)
+from .enhancements.filters import (
+    LexicalPrefilterConfig,
+    VectorSearchFilterConfig,
+    AtlasSearchFilterConfig,
+    build_lexical_prefilters,
+    build_search_vector_search_stage,
+    TextFilter,
+    FuzzyFilter,
+    PhraseFilter,
+    WildcardFilter,
+    GeoFilter,
+    QueryStringFilter,
 )
 
 # Memory exports (conversation session management)
@@ -130,6 +144,21 @@ __all__ = [
     "MongoDBHybridSearchConfig",
     "manual_hybrid_search_with_rrf",
     "reciprocal_rank_fusion",
+    "vector_search_with_lexical_prefilters",
+    # Filter Configs
+    "LexicalPrefilterConfig",
+    "VectorSearchFilterConfig",
+    "AtlasSearchFilterConfig",
+    # Filter Builders
+    "build_lexical_prefilters",
+    "build_search_vector_search_stage",
+    # Filter Types
+    "TextFilter",
+    "FuzzyFilter",
+    "PhraseFilter",
+    "WildcardFilter",
+    "GeoFilter",
+    "QueryStringFilter",
     # Memory
     "ConversationMemory",
     "ConversationSession",

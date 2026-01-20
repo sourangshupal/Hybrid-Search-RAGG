@@ -30,6 +30,149 @@ from hybridrag import create_hybridrag, Settings
 # Knowledge Base Display Functions
 # ============================================================================
 
+def _spark_bar(value: float, max_value: float, width: int = 16) -> str:
+    """Create a compact spark bar for quick visual comparison."""
+    if max_value <= 0:
+        return "░" * width
+    filled = int(round((value / max_value) * width))
+    filled = max(0, min(width, filled))
+    return "█" * filled + "░" * (width - filled)
+
+
+def _safe_div(numerator: float, denominator: float) -> float:
+    """Safe division with zero guard."""
+    return numerator / denominator if denominator else 0.0
+
+
+async def _get_entity_samples(rag, limit: int = 8) -> list[str]:
+    """Fetch a small sample of entity names for a graph preview."""
+    candidates = []
+    try:
+        cursor = rag.entities_vdb._data.find(
+            {},
+            {"_id": 0, "entity": 1, "name": 1, "label": 1, "title": 1},
+        ).limit(limit * 3)
+        async for doc in cursor:
+            for key in ("entity", "name", "label", "title"):
+                value = doc.get(key)
+                if isinstance(value, str) and value.strip():
+                    candidates.append(value.strip())
+                    break
+            if len(candidates) >= limit:
+                break
+    except Exception:
+        return []
+    # Deduplicate while preserving order
+    seen = set()
+    unique = []
+    for value in candidates:
+        if value not in seen:
+            unique.append(value)
+            seen.add(value)
+        if len(unique) >= limit:
+            break
+    return unique
+
+
+async def format_dashboard_panel(rag, session_id: str, mode: str) -> str:
+    """Build the main HybridRAG Studio dashboard view."""
+    stats = await rag.get_knowledge_base_stats()
+    status = await rag.get_status()
+
+    docs_total = stats["documents"]["total"]
+    chunks = stats["chunks"]
+    entities = stats["entities"]
+    relationships = stats["relationships"]
+    by_status = stats["documents"]["by_status"]
+
+    processed = by_status.get("processed", 0)
+    pending = by_status.get("pending", 0)
+    failed = by_status.get("failed", 0)
+    processing = by_status.get("processing", 0)
+
+    workspace = os.getenv("MONGODB_WORKSPACE") or os.getenv("WORKSPACE") or "default"
+    session_short = f"{session_id[:8]}..." if session_id else "none"
+
+    chunks_per_doc = _safe_div(chunks, docs_total)
+    entities_per_doc = _safe_div(entities, docs_total)
+    rels_per_entity = _safe_div(relationships, entities)
+
+    entity_samples = await _get_entity_samples(rag)
+
+    max_metric = max(docs_total, chunks, entities, relationships, 1)
+
+    lines = []
+    lines.append("# ✨ HybridRAG Studio")
+    lines.append("**The developer‑first command center for demos, debug, and discovery.**")
+    lines.append("")
+    lines.append("### 🧭 Workspace Snapshot")
+    lines.append("| Field | Value |")
+    lines.append("|------|-------|")
+    lines.append(f"| Workspace | `{workspace}` |")
+    lines.append(f"| Session | `{session_short}` |")
+    lines.append(f"| Mode | **{mode}** |")
+    lines.append(f"| LLM | `{status.get('llm_provider', 'unknown')}` · `{status.get('llm_model', 'unknown')}` |")
+    lines.append(f"| Embeddings | `{status.get('embedding_model', 'unknown')}` |")
+    lines.append(f"| Reranker | `{status.get('rerank_model', 'disabled') or 'disabled'}` |")
+    lines.append("")
+
+    lines.append("### 📊 Knowledge Base Health")
+    lines.append("| Metric | Count | Signal |")
+    lines.append("|--------|-------|--------|")
+    lines.append(f"| Documents | **{docs_total:,}** | `{_spark_bar(docs_total, max_metric)}` |")
+    lines.append(f"| Chunks | **{chunks:,}** | `{_spark_bar(chunks, max_metric)}` |")
+    lines.append(f"| Entities | **{entities:,}** | `{_spark_bar(entities, max_metric)}` |")
+    lines.append(f"| Relationships | **{relationships:,}** | `{_spark_bar(relationships, max_metric)}` |")
+    lines.append("")
+
+    lines.append("### 🧪 Ingestion Health")
+    lines.append("| Status | Count |")
+    lines.append("|--------|-------|")
+    lines.append(f"| ✅ Processed | **{processed}** |")
+    lines.append(f"| 🔄 Processing | **{processing}** |")
+    lines.append(f"| ⏳ Pending | **{pending}** |")
+    lines.append(f"| ❌ Failed | **{failed}** |")
+    lines.append("")
+
+    lines.append("### 🧠 Graph Snapshot")
+    lines.append("| Signal | Value |")
+    lines.append("|--------|-------|")
+    lines.append(f"| Entities / Doc | **{entities_per_doc:.2f}** |")
+    lines.append(f"| Chunks / Doc | **{chunks_per_doc:.2f}** |")
+    lines.append(f"| Relationships / Entity | **{rels_per_entity:.2f}** |")
+    lines.append("")
+    if entity_samples:
+        lines.append("**Entity Constellation (sample):**")
+        lines.append(" · ".join(f"`{e[:24]}`" for e in entity_samples))
+        lines.append("")
+    else:
+        lines.append("*No entities yet. Upload docs to light up the graph.*")
+        lines.append("")
+
+    # Recent documents
+    recent_docs = stats["recent_documents"]
+    lines.append("### 📁 Recent Documents")
+    if recent_docs:
+        lines.append("| File | Status | Chunks |")
+        lines.append("|------|--------|--------|")
+        for doc in recent_docs[:8]:
+            file_name = doc["file"]
+            if len(file_name) > 32:
+                file_name = file_name[:29] + "..."
+            status_icon = {"processed": "✅", "pending": "⏳", "processing": "🔄", "failed": "❌"}.get(doc["status"], "📄")
+            lines.append(f"| `{file_name}` | {status_icon} {doc['status']} | {doc['chunks']} |")
+    else:
+        lines.append("*No documents indexed yet.*")
+    lines.append("")
+
+    lines.append("### 💡 Demo Prompts")
+    lines.append("- *“Show me the highest SLA credit tier and how to claim it.”*")
+    lines.append("- *“Summarize the release freeze rules and exceptions.”*")
+    lines.append("- *“What’s our current ingestion health and how many entities exist?”*")
+    lines.append("")
+
+    return "\n".join(lines)
+
 async def format_knowledge_base_stats(rag) -> str:
     """Format knowledge base statistics as a beautiful markdown display."""
     try:
@@ -42,18 +185,20 @@ async def format_knowledge_base_stats(rag) -> str:
         by_status = stats["documents"]["by_status"]
         recent_docs = stats["recent_documents"]
 
+        max_metric = max(docs_total, chunks, entities, relationships, 1)
+
         # Build the display
         lines = []
-        lines.append("## Knowledge Base")
+        lines.append("## 📚 Knowledge Base Snapshot")
         lines.append("")
 
         # Stats grid
-        lines.append("| Metric | Count |")
-        lines.append("|--------|-------|")
-        lines.append(f"| Documents | **{docs_total:,}** |")
-        lines.append(f"| Chunks | **{chunks:,}** |")
-        lines.append(f"| Entities | **{entities:,}** |")
-        lines.append(f"| Relationships | **{relationships:,}** |")
+        lines.append("| Metric | Count | Signal |")
+        lines.append("|--------|-------|--------|")
+        lines.append(f"| Documents | **{docs_total:,}** | `{_spark_bar(docs_total, max_metric)}` |")
+        lines.append(f"| Chunks | **{chunks:,}** | `{_spark_bar(chunks, max_metric)}` |")
+        lines.append(f"| Entities | **{entities:,}** | `{_spark_bar(entities, max_metric)}` |")
+        lines.append(f"| Relationships | **{relationships:,}** | `{_spark_bar(relationships, max_metric)}` |")
         lines.append("")
 
         # Status breakdown if there are documents
@@ -101,16 +246,16 @@ async def format_kb_management_panel(rag) -> tuple[str, list]:
         chunks = stats["chunks"]
 
         lines = []
-        lines.append("## 📚 Knowledge Base Manager")
+        lines.append("## 🧰 Knowledge Base Manager")
         lines.append("")
 
         # Visual stats cards (markdown style)
         lines.append("### 📊 Statistics")
         lines.append("```")
-        lines.append(f"┌─────────────────────────────────────────┐")
-        lines.append(f"│  📄 Documents: {docs_total:<6}  │  📦 Chunks: {chunks:<8}  │")
-        lines.append(f"│  🔷 Entities:  {entities:<6}  │  🔗 Relations: {relationships:<6}  │")
-        lines.append(f"└─────────────────────────────────────────┘")
+        lines.append(f"┌─────────────────────────────────────────────┐")
+        lines.append(f"│  📄 Documents: {docs_total:<7} │  📦 Chunks: {chunks:<9} │")
+        lines.append(f"│  🔷 Entities:  {entities:<7} │  🔗 Relations: {relationships:<7} │")
+        lines.append("└─────────────────────────────────────────────┘")
         lines.append("```")
         lines.append("")
 
@@ -119,7 +264,7 @@ async def format_kb_management_panel(rag) -> tuple[str, list]:
 
         if recent_docs:
             lines.append("### 📁 Documents")
-            lines.append("*Click delete button to remove a document from the knowledge base*")
+            lines.append("*Delete is only enabled for processed documents to prevent partial removal.*")
             lines.append("")
 
             for i, doc in enumerate(recent_docs[:10]):  # Show up to 10 docs
@@ -142,7 +287,7 @@ async def format_kb_management_panel(rag) -> tuple[str, list]:
                     display_name = display_name[:32] + "..."
 
                 lines.append(f"**{i+1}.** {status_icon} `{display_name}`")
-                lines.append(f"   └── {chunk_count} chunks | Status: {status}")
+                lines.append(f"   └── Chunks: **{chunk_count}** | Status: **{status}**")
                 lines.append("")
 
                 # Create delete action for each document
@@ -164,7 +309,7 @@ async def format_kb_management_panel(rag) -> tuple[str, list]:
             lines.append("")
 
         lines.append("---")
-        lines.append("**Commands:** `/kb` (quick stats) | `/manage` (this panel) | `/upload` (add files)")
+        lines.append("**Commands:** `/dashboard` | `/kb` | `/manage` | `/upload` | `/status` | `/help`")
         lines.append("")
 
         return "\n".join(lines), actions
@@ -172,6 +317,44 @@ async def format_kb_management_panel(rag) -> tuple[str, list]:
     except Exception as e:
         return f"*Error loading KB management panel: {e}*", []
 
+
+# ============================================================================
+# Action Builders
+# ============================================================================
+
+def build_dashboard_actions(current_mode: str) -> list:
+    """Create the primary action dock for the dashboard."""
+    mode_labels = {
+        "mix": "mix",
+        "hybrid": "hybrid",
+        "local": "local",
+        "global": "global",
+        "naive": "naive",
+        "bypass": "bypass",
+    }
+    mode_actions = [
+        cl.Action(
+            name="set_mode",
+            payload={"mode": mode},
+            label=f"⚙️ Mode: {label}",
+            tooltip=f"Switch query mode to {mode}",
+        )
+        for mode, label in mode_labels.items()
+    ]
+
+    actions = [
+        cl.Action(name="show_dashboard", payload={}, label="🏠 Dashboard", tooltip="Show main dashboard"),
+        cl.Action(name="show_kb_manager", payload={}, label="📚 KB Manager", tooltip="Manage documents"),
+        cl.Action(name="upload_files", payload={}, label="📤 Upload", tooltip="Upload documents"),
+        cl.Action(name="ingest_url", payload={}, label="🌐 Ingest URL", tooltip="Ingest a web page"),
+        cl.Action(name="crawl_website", payload={}, label="🕷️ Crawl", tooltip="Crawl a website"),
+        cl.Action(name="show_system_status", payload={}, label="🧪 System", tooltip="Show system status"),
+        cl.Action(name="show_memory", payload={}, label="🧠 Memory", tooltip="View conversation memory"),
+        cl.Action(name="show_help", payload={}, label="❓ Help", tooltip="Show help & commands"),
+    ]
+
+    # Keep the primary dock compact, and expose modes after it
+    return actions + mode_actions
 
 # ============================================================================
 # File Processing Functions
@@ -236,27 +419,10 @@ async def on_chat_start():
         cl.user_session.set("session_id", session_id)  # For conversation memory
         cl.user_session.set("mode", "mix")  # Default mode
 
-        # Welcome message
-        welcome = """## 🚀 HybridRAG Chat is ready!
-
-**Commands:**
-| Command | Description |
-|---------|-------------|
-| `/kb` | Quick knowledge base stats |
-| `/manage` | **📚 KB Management Panel** |
-| `/mode <mode>` | Change query mode |
-| `/status` | System configuration |
-| `/help` | All commands |
-
-**Current mode:** `mix` (Knowledge Graph + Vector Search)
-
----
-"""
-        await cl.Message(content=welcome).send()
-
-        # Show knowledge base stats
-        kb_stats = await format_knowledge_base_stats(rag)
-        await cl.Message(content=kb_stats).send()
+        # Main dashboard
+        dashboard = await format_dashboard_panel(rag, session_id, cl.user_session.get("mode", "mix"))
+        actions = build_dashboard_actions(cl.user_session.get("mode", "mix"))
+        await cl.Message(content=dashboard, actions=actions).send()
 
     except Exception as e:
         await cl.Message(
@@ -303,6 +469,108 @@ async def on_delete_doc(action: cl.Action):
     # Remove the action button
     await action.remove()
 
+
+@cl.action_callback("show_dashboard")
+async def on_show_dashboard(action: cl.Action):
+    rag = cl.user_session.get("rag")
+    if not rag:
+        await cl.Message(content="❌ RAG system not initialized.").send()
+        return
+
+    session_id = cl.user_session.get("session_id", "")
+    mode = cl.user_session.get("mode", "mix")
+    dashboard = await format_dashboard_panel(rag, session_id, mode)
+    actions = build_dashboard_actions(mode)
+    await cl.Message(content=dashboard, actions=actions).send()
+
+
+@cl.action_callback("show_kb_manager")
+async def on_show_kb_manager(action: cl.Action):
+    rag = cl.user_session.get("rag")
+    if not rag:
+        await cl.Message(content="❌ RAG system not initialized.").send()
+        return
+
+    content, actions = await format_kb_management_panel(rag)
+    upload_action = cl.Action(
+        name="upload_files",
+        payload={},
+        label="📤 Upload Files",
+        tooltip="Upload new documents to the knowledge base",
+    )
+    ingest_url_action = cl.Action(
+        name="ingest_url",
+        payload={},
+        label="🌐 Ingest URL",
+        tooltip="Extract content from a single web URL",
+    )
+    crawl_website_action = cl.Action(
+        name="crawl_website",
+        payload={},
+        label="🕷️ Crawl Website",
+        tooltip="Crawl and ingest multiple pages from a website",
+    )
+    actions.insert(0, crawl_website_action)
+    actions.insert(0, ingest_url_action)
+    actions.insert(0, upload_action)
+    await cl.Message(content=content, actions=actions).send()
+
+
+@cl.action_callback("show_system_status")
+async def on_show_system_status(action: cl.Action):
+    rag = cl.user_session.get("rag")
+    if not rag:
+        await cl.Message(content="❌ RAG system not initialized.").send()
+        return
+
+    try:
+        status = await rag.get_status()
+        workspace = os.getenv("MONGODB_WORKSPACE") or os.getenv("WORKSPACE") or "default"
+        status_text = f"""## 🧪 System Status
+
+| Component | Value |
+|-----------|-------|
+| Workspace | `{workspace}` |
+| LLM Provider | **{status.get('llm_provider', 'unknown')}** |
+| LLM Model | `{status.get('llm_model', 'unknown')}` |
+| Embedding | `{status.get('embedding_model', 'unknown')}` |
+| Reranker | `{status.get('rerank_model', 'disabled') or 'disabled'}` |
+| Query Mode | **{cl.user_session.get('mode', 'mix')}** |
+| Database | `{status.get('mongodb_database', 'unknown')}` |
+
+### 🔧 Enhancements
+- Implicit Expansion: {'✅ Enabled' if status.get('enhancements', {}).get('implicit_expansion') else '❌ Disabled'}
+- Entity Boosting: {'✅ Enabled' if status.get('enhancements', {}).get('entity_boosting') else '❌ Disabled'}
+"""
+        await cl.Message(content=status_text).send()
+    except Exception as e:
+        await cl.Message(content=f"❌ Error getting status: {e}").send()
+
+
+@cl.action_callback("show_help")
+async def on_show_help(action: cl.Action):
+    await handle_command("/help", cl.user_session.get("rag"))
+
+
+@cl.action_callback("show_memory")
+async def on_show_memory(action: cl.Action):
+    rag = cl.user_session.get("rag")
+    if not rag:
+        await cl.Message(content="❌ RAG system not initialized.").send()
+        return
+    await handle_command("/memory", rag)
+
+
+@cl.action_callback("set_mode")
+async def on_set_mode(action: cl.Action):
+    mode = action.payload.get("mode", "").lower()
+    valid_modes = ["local", "global", "hybrid", "naive", "mix", "bypass"]
+    if mode not in valid_modes:
+        await cl.Message(content=f"❌ Invalid mode: `{mode}`").send()
+        return
+
+    cl.user_session.set("mode", mode)
+    await cl.Message(content=f"✅ Query mode changed to **{mode}**").send()
 
 @cl.action_callback("upload_files")
 async def on_upload_files(action: cl.Action):
@@ -520,7 +788,8 @@ async def on_message(message: cl.Message):
                     "- Questions about content in your documents\n"
                     "- Summaries or explanations of topics\n"
                     "- Specific details or facts\n\n"
-                    "📤 Upload a PDF, TXT, or MD file to get started!"
+                    "📤 Upload a PDF, TXT, or MD file to get started!\n\n"
+                    "Tip: Open the **Dashboard** with `/dashboard` to manage everything."
         ).send()
         return
 
@@ -533,7 +802,7 @@ async def on_message(message: cl.Message):
                     "- 🚀 **Voyage AI** - embeddings & reranking\n"
                     "- 🧠 **Multi-provider LLM** - response generation\n"
                     "- 🔗 **Knowledge Graph** - entity extraction & querying\n\n"
-                    "Type `/manage` to see your Knowledge Base!\n\n"
+                    "Type `/dashboard` to open the developer cockpit.\n\n"
                     "**Try asking:**\n"
                     "- Questions about your uploaded documents\n"
                     "- Summaries of specific topics\n"
@@ -787,6 +1056,13 @@ async def handle_command(text: str, rag):
         kb_stats = await format_knowledge_base_stats(rag)
         await cl.Message(content=kb_stats).send()
 
+    elif command == "/dashboard":
+        session_id = cl.user_session.get("session_id", "")
+        mode = cl.user_session.get("mode", "mix")
+        dashboard = await format_dashboard_panel(rag, session_id, mode)
+        actions = build_dashboard_actions(mode)
+        await cl.Message(content=dashboard, actions=actions).send()
+
     elif command == "/manage":
         # Full KB Management Panel with actions
         content, actions = await format_kb_management_panel(rag)
@@ -831,10 +1107,12 @@ async def handle_command(text: str, rag):
     elif command == "/status":
         try:
             status = await rag.get_status()
+            workspace = os.getenv("MONGODB_WORKSPACE") or os.getenv("WORKSPACE") or "default"
             status_text = f"""## ⚙️ System Status
 
 | Component | Value |
 |-----------|-------|
+| Workspace | `{workspace}` |
 | LLM Provider | **{status.get('llm_provider', 'unknown')}** |
 | LLM Model | `{status.get('llm_model', 'unknown')}` |
 | Embedding | `{status.get('embedding_model', 'unknown')}` |
@@ -911,6 +1189,7 @@ async def handle_command(text: str, rag):
 ### Commands
 | Command | Description |
 |---------|-------------|
+| `/dashboard` | **Studio dashboard (recommended)** |
 | `/kb` | Quick knowledge base stats |
 | `/manage` | **📚 Full KB Management Panel** |
 | `/upload` | Upload files dialog |
@@ -943,6 +1222,7 @@ async def handle_command(text: str, rag):
 - Files are processed and added to the knowledge graph
 
 ### Tips
+- 💡 Use `/dashboard` as your demo cockpit and developer overview
 - 💡 Use `/manage` to see all documents and delete unwanted ones
 - 💡 Ask follow-up questions for deeper exploration
 - 💡 Try different query modes for different types of questions
@@ -969,6 +1249,7 @@ async def handle_query(query: str, rag):
 
     try:
         # Query with memory for multi-turn conversation support
+        history_used = 0
         if session_id:
             result = await rag.query_with_memory(
                 query=query,
@@ -990,8 +1271,15 @@ async def handle_query(query: str, rag):
         answer = result.get("answer", "No answer generated.")
         context = result.get("context", "")
 
-        # Build response text - keep it clean, don't show raw context
-        response_text = answer
+        # Build response text - include telemetry without exposing raw context
+        telemetry_lines = [
+            "---",
+            "### 🧾 Retrieval Telemetry",
+            f"- Mode: `{mode}`",
+            f"- Context size: `{len(context):,}` chars",
+            f"- History used: `{history_used}`",
+        ]
+        response_text = f"{answer}\n\n" + "\n".join(telemetry_lines)
 
         # Update the message content directly
         msg.content = response_text

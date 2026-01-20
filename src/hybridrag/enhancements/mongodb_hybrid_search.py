@@ -166,6 +166,10 @@ class MongoDBHybridSearchConfig:
     # Filtering
     cosine_threshold: float = 0.3
 
+    # Lexical Prefilters (MongoDB 8.2+)
+    use_lexical_prefilters: bool = False  # Enable $search.vectorSearch with Atlas Search filters
+    lexical_prefilter_index: str = "default"  # Atlas Search index name for lexical prefilters
+
     def get_search_paths(self) -> list[str]:
         """Get list of search paths."""
         if self.text_search_path_weights:

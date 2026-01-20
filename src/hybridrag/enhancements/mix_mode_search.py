@@ -137,6 +137,7 @@ async def mix_mode_search(
     config: MixModeConfig | None = None,
     query_entities: list[str] | None = None,
     collection_name: str = "text_chunks",
+    lexical_filter_config: LexicalPrefilterConfig | None = None,
 ) -> list[MixModeSearchResult]:
     """
     Knowledge graph enhanced hybrid search.
@@ -193,12 +194,20 @@ async def mix_mode_search(
     async def run_hybrid_search() -> None:
         nonlocal rank_fusion_results
         try:
+            # Use default lexical prefilter if enabled in config
+            effective_lexical_filter = (
+                lexical_filter_config or config.default_lexical_prefilter
+                if config.use_lexical_prefilters
+                else None
+            )
+
             rank_fusion_results = await hybrid_search_with_rank_fusion(
                 collection=collection,
                 query_text=query,
                 query_vector=query_vector,
                 top_k=top_k * 2,  # Over-fetch for entity merging
                 config=config.hybrid_config,
+                lexical_filter_config=effective_lexical_filter,
             )
             logger.info(
                 f"[MIX_MODE] $rankFusion returned {len(rank_fusion_results)} results"

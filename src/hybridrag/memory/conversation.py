@@ -30,11 +30,18 @@ from __future__ import annotations
 import logging
 import os
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Any, Callable, Literal, Optional
+from datetime import UTC, datetime
+from typing import Any, Literal
 
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
+
+
+def _utcnow() -> datetime:
+    """Return current UTC time as timezone-aware datetime."""
+    return datetime.now(UTC)
+
 
 logger = logging.getLogger("hybridrag.memory")
 
@@ -67,11 +74,13 @@ class ConversationSession:
     messages: list[dict[str, Any]] = field(default_factory=list)
     summary: str = ""  # Running summary of compacted (old) messages
     summary_token_count: int = 0  # Estimated token count of summary
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    updated_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=_utcnow)
+    updated_at: datetime = field(default_factory=_utcnow)
     metadata: dict[str, Any] = field(default_factory=dict)
 
-    def to_history_format(self, max_messages: int | None = None) -> list[dict[str, str]]:
+    def to_history_format(
+        self, max_messages: int | None = None
+    ) -> list[dict[str, str]]:
         """
         Convert messages to conversation history format.
 
@@ -85,10 +94,7 @@ class ConversationSession:
         if max_messages is not None:
             messages = messages[-max_messages:]
 
-        return [
-            {"role": msg["role"], "content": msg["content"]}
-            for msg in messages
-        ]
+        return [{"role": msg["role"], "content": msg["content"]} for msg in messages]
 
     def to_context_string(self, max_messages: int | None = None) -> str:
         """
@@ -184,7 +190,9 @@ class ConversationMemory:
             messages_key: Field name for messages array
         """
         self._mongodb_uri = mongodb_uri or os.environ.get("MONGODB_URI")
-        self._database_name = database or os.environ.get("MONGODB_DATABASE", "hybridrag")
+        self._database_name = database or os.environ.get(
+            "MONGODB_DATABASE", "hybridrag"
+        )
         self._collection_name = collection_name
         self._history_size = history_size
         self._max_token_limit = max_token_limit
@@ -207,7 +215,9 @@ class ConversationMemory:
         if self._initialized:
             return
 
-        logger.info(f"[MEMORY] Initializing ConversationMemory: collection={self._collection_name}")
+        logger.info(
+            f"[MEMORY] Initializing ConversationMemory: collection={self._collection_name}"
+        )
 
         self._client = AsyncIOMotorClient(self._mongodb_uri)
         self._db = self._client[self._database_name]
@@ -246,7 +256,7 @@ class ConversationMemory:
         self._ensure_initialized()
 
         session_id = session_id or str(uuid.uuid4())
-        now = datetime.utcnow()
+        now = _utcnow()
 
         doc = {
             self._session_id_key: session_id,
@@ -290,8 +300,8 @@ class ConversationMemory:
             messages=doc.get(self._messages_key, []),
             summary=doc.get("summary", ""),
             summary_token_count=doc.get("summary_token_count", 0),
-            created_at=doc.get("created_at", datetime.utcnow()),
-            updated_at=doc.get("updated_at", datetime.utcnow()),
+            created_at=doc.get("created_at", _utcnow()),
+            updated_at=doc.get("updated_at", _utcnow()),
             metadata=doc.get("metadata", {}),
         )
 
@@ -316,19 +326,19 @@ class ConversationMemory:
         message = {
             "role": role,
             "content": content,
-            "timestamp": datetime.utcnow(),
+            "timestamp": _utcnow(),
         }
         if metadata:
             message["metadata"] = metadata
 
         # Use upsert to create session if it doesn't exist
-        result = await self._collection.update_one(
+        await self._collection.update_one(
             {self._session_id_key: session_id},
             {
                 "$push": {self._messages_key: message},
-                "$set": {"updated_at": datetime.utcnow()},
+                "$set": {"updated_at": _utcnow()},
                 "$setOnInsert": {
-                    "created_at": datetime.utcnow(),
+                    "created_at": _utcnow(),
                     "metadata": {},
                 },
             },
@@ -405,7 +415,9 @@ class ConversationMemory:
         if total_tokens <= self._max_token_limit:
             return  # Under limit, no compaction needed
 
-        logger.info(f"[MEMORY] Session {session_id[:8]}... exceeds token limit ({total_tokens} > {self._max_token_limit}), compacting...")
+        logger.info(
+            f"[MEMORY] Session {session_id[:8]}... exceeds token limit ({total_tokens} > {self._max_token_limit}), compacting..."
+        )
 
         # Prune oldest messages until under limit (keep at least 4 messages)
         messages = session.messages.copy()
@@ -436,19 +448,23 @@ class ConversationMemory:
                         self._messages_key: messages,
                         "summary": new_summary,
                         "summary_token_count": summary_tokens,
-                        "summary_updated_at": datetime.utcnow(),
-                        "updated_at": datetime.utcnow(),
+                        "summary_updated_at": _utcnow(),
+                        "updated_at": _utcnow(),
                     }
-                }
+                },
             )
-            logger.info(f"[MEMORY] Compacted session {session_id[:8]}...: pruned {len(pruned)} messages, kept {len(messages)}")
+            logger.info(
+                f"[MEMORY] Compacted session {session_id[:8]}...: pruned {len(pruned)} messages, kept {len(messages)}"
+            )
         else:
             # No LLM - fall back to simple truncation (legacy behavior)
             await self._collection.update_one(
                 {self._session_id_key: session_id},
-                {"$set": {self._messages_key: messages, "updated_at": datetime.utcnow()}}
+                {"$set": {self._messages_key: messages, "updated_at": _utcnow()}},
             )
-            logger.warning(f"[MEMORY] No LLM for summarization, truncated {len(pruned)} messages")
+            logger.warning(
+                f"[MEMORY] No LLM for summarization, truncated {len(pruned)} messages"
+            )
 
     async def _trim_history(self, session_id: str) -> None:
         """
@@ -465,17 +481,18 @@ class ConversationMemory:
             max_messages = self._history_size * 2  # Pairs of user/assistant
 
             doc = await self._collection.find_one(
-                {self._session_id_key: session_id},
-                {self._messages_key: 1}
+                {self._session_id_key: session_id}, {self._messages_key: 1}
             )
 
             if doc and len(doc.get(self._messages_key, [])) > max_messages:
                 messages = doc[self._messages_key][-max_messages:]
                 await self._collection.update_one(
                     {self._session_id_key: session_id},
-                    {"$set": {self._messages_key: messages}}
+                    {"$set": {self._messages_key: messages}},
                 )
-                logger.debug(f"[MEMORY] Trimmed history for session {session_id} to {max_messages} messages")
+                logger.debug(
+                    f"[MEMORY] Trimmed history for session {session_id} to {max_messages} messages"
+                )
 
     async def get_messages(
         self,
@@ -495,8 +512,7 @@ class ConversationMemory:
         self._ensure_initialized()
 
         doc = await self._collection.find_one(
-            {self._session_id_key: session_id},
-            {self._messages_key: 1}
+            {self._session_id_key: session_id}, {self._messages_key: 1}
         )
 
         if not doc:
@@ -525,10 +541,7 @@ class ConversationMemory:
             List of {"role": "user/assistant", "content": "..."} dicts
         """
         messages = await self.get_messages(session_id, limit=max_messages)
-        return [
-            {"role": msg["role"], "content": msg["content"]}
-            for msg in messages
-        ]
+        return [{"role": msg["role"], "content": msg["content"]} for msg in messages]
 
     # Alias for backwards compatibility
     async def get_lightrag_history(
@@ -576,9 +589,9 @@ class ConversationMemory:
             {
                 "$set": {
                     self._messages_key: [],
-                    "updated_at": datetime.utcnow(),
+                    "updated_at": _utcnow(),
                 }
-            }
+            },
         )
         logger.info(f"[MEMORY] Cleared session: {session_id}")
 
@@ -621,27 +634,38 @@ class ConversationMemory:
         """
         self._ensure_initialized()
 
-        cursor = self._collection.find(
-            {},
-            {
-                self._session_id_key: 1,
-                "created_at": 1,
-                "updated_at": 1,
-                "metadata": 1,
-                f"{self._messages_key}": {"$slice": -1},  # Last message only
-            }
-        ).sort("updated_at", -1).skip(skip).limit(limit)
+        cursor = (
+            self._collection.find(
+                {},
+                {
+                    self._session_id_key: 1,
+                    "created_at": 1,
+                    "updated_at": 1,
+                    "metadata": 1,
+                    f"{self._messages_key}": {"$slice": -1},  # Last message only
+                },
+            )
+            .sort("updated_at", -1)
+            .skip(skip)
+            .limit(limit)
+        )
 
         sessions = []
         async for doc in cursor:
-            sessions.append({
-                "session_id": doc[self._session_id_key],
-                "created_at": doc.get("created_at"),
-                "updated_at": doc.get("updated_at"),
-                "metadata": doc.get("metadata", {}),
-                "message_count": len(doc.get(self._messages_key, [])),
-                "last_message": doc.get(self._messages_key, [{}])[-1] if doc.get(self._messages_key) else None,
-            })
+            sessions.append(
+                {
+                    "session_id": doc[self._session_id_key],
+                    "created_at": doc.get("created_at"),
+                    "updated_at": doc.get("updated_at"),
+                    "metadata": doc.get("metadata", {}),
+                    "message_count": len(doc.get(self._messages_key, [])),
+                    "last_message": (
+                        doc.get(self._messages_key, [{}])[-1]
+                        if doc.get(self._messages_key)
+                        else None
+                    ),
+                }
+            )
 
         return sessions
 

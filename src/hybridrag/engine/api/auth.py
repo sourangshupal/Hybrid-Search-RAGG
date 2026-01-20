@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import jwt
 from dotenv import load_dotenv
@@ -6,6 +6,12 @@ from fastapi import HTTPException, status
 from pydantic import BaseModel
 
 from .config import global_args
+
+
+def _utcnow() -> datetime:
+    """Return current UTC time as timezone-aware datetime."""
+    return datetime.now(UTC)
+
 
 # use the .env that is inside the current folder
 # allows to use different .env file for each hybridrag instance
@@ -61,7 +67,7 @@ class AuthHandler:
         else:
             expire_hours = custom_expire_hours
 
-        expire = datetime.utcnow() + timedelta(hours=expire_hours)
+        expire = _utcnow() + timedelta(hours=expire_hours)
 
         # Create payload
         payload = TokenPayload(
@@ -86,9 +92,9 @@ class AuthHandler:
         try:
             payload = jwt.decode(token, self.secret, algorithms=[self.algorithm])
             expire_timestamp = payload["exp"]
-            expire_time = datetime.utcfromtimestamp(expire_timestamp)
+            expire_time = datetime.fromtimestamp(expire_timestamp, tz=UTC)
 
-            if datetime.utcnow() > expire_time:
+            if _utcnow() > expire_time:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired"
                 )
@@ -100,10 +106,10 @@ class AuthHandler:
                 "metadata": payload.get("metadata", {}),
                 "exp": expire_time,
             }
-        except jwt.PyJWTError:
+        except jwt.PyJWTError as err:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
-            )
+            ) from err
 
 
 auth_handler = AuthHandler()

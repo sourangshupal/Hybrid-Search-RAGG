@@ -7,6 +7,7 @@ Follows official Tavily SDK patterns and integrates with HybridRAG ingestion pip
 
 from __future__ import annotations
 
+import importlib.util
 import logging
 from typing import Literal
 from urllib.parse import urlparse
@@ -15,9 +16,12 @@ from .types import ProcessedDocument
 
 logger = logging.getLogger("hybridrag.ingestion.tavily")
 
-# Check if Tavily SDK is available
-TAVILY_AVAILABLE = False
-try:
+# Check if Tavily SDK is available using importlib.util.find_spec()
+# This checks for module existence WITHOUT importing (no side effects or warnings)
+# Per Python docs: https://docs.python.org/3/library/importlib.html#checking-if-a-module-can-be-imported
+TAVILY_AVAILABLE = importlib.util.find_spec("tavily") is not None
+
+if TAVILY_AVAILABLE:
     from tavily import AsyncTavilyClient
     from tavily.errors import (
         BadRequestError,
@@ -30,13 +34,11 @@ try:
         TimeoutError as TavilyTimeoutError,
     )
 
-    TAVILY_AVAILABLE = True
     # Export TimeoutError as well for convenience
     TimeoutError = TavilyTimeoutError  # type: ignore
-except ImportError:
-    logger.warning(
-        "Tavily SDK not available. Install with: pip install tavily-python"
-    )
+else:
+    # Silent fallback - no warning at import time (optional dependency)
+    # Warning is raised only when user actually tries to use TavilyProcessor
     AsyncTavilyClient = None  # type: ignore
     # Define exception classes as placeholders
     BadRequestError = Exception  # type: ignore
@@ -153,16 +155,18 @@ class TavilyProcessor:
             results = result.get("results", [])
             failed_results = result.get("failed_results", [])
 
-            logger.debug(f"[TAVILY] Results count: {len(results)}, Failed count: {len(failed_results)}")
+            logger.debug(
+                f"[TAVILY] Results count: {len(results)}, Failed count: {len(failed_results)}"
+            )
 
             if failed_results:
                 failed_urls = [r.get("url", "unknown") for r in failed_results]
-                logger.warning(
-                    f"[TAVILY] Failed to extract from URLs: {failed_urls}"
-                )
+                logger.warning(f"[TAVILY] Failed to extract from URLs: {failed_urls}")
 
             if not results:
-                logger.error(f"[TAVILY] No results in response. Full response: {result}")
+                logger.error(
+                    f"[TAVILY] No results in response. Full response: {result}"
+                )
                 raise ValueError(
                     f"No content extracted from URL: {url}. "
                     f"Failed results: {failed_results}"
@@ -180,7 +184,9 @@ class TavilyProcessor:
             logger.debug(f"[TAVILY] Content length: {len(content)}, Title: {title}")
 
             if not content or not content.strip():
-                logger.error(f"[TAVILY] Empty content. Content data keys: {list(content_data.keys())}")
+                logger.error(
+                    f"[TAVILY] Empty content. Content data keys: {list(content_data.keys())}"
+                )
                 raise ValueError(f"Empty content extracted from URL: {url}")
 
             logger.info(
@@ -276,7 +282,9 @@ class TavilyProcessor:
             logger.debug(f"[TAVILY] Pages count: {len(pages)}")
 
             if not pages:
-                logger.error(f"[TAVILY] No pages in crawl response. Full response: {result}")
+                logger.error(
+                    f"[TAVILY] No pages in crawl response. Full response: {result}"
+                )
                 raise ValueError(f"No pages crawled from URL: {url}")
 
             logger.info(f"[TAVILY] Crawled {len(pages)} pages from: {url}")
@@ -291,9 +299,7 @@ class TavilyProcessor:
                 page_url = page_data.get("url", url)
 
                 if not content or not content.strip():
-                    logger.warning(
-                        f"[TAVILY] Skipping empty page: {page_url}"
-                    )
+                    logger.warning(f"[TAVILY] Skipping empty page: {page_url}")
                     continue
 
                 processed_docs.append(
@@ -318,9 +324,7 @@ class TavilyProcessor:
                     f"No valid content extracted from crawled pages: {url}"
                 )
 
-            logger.info(
-                f"[TAVILY] Successfully processed {len(processed_docs)} pages"
-            )
+            logger.info(f"[TAVILY] Successfully processed {len(processed_docs)} pages")
             return processed_docs
 
         except (
@@ -353,4 +357,3 @@ def create_tavily_processor(api_key: str) -> TavilyProcessor:
         MissingAPIKeyError: If API key is not provided.
     """
     return TavilyProcessor(api_key=api_key)
-

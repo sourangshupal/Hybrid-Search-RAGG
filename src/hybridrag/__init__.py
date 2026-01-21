@@ -3,7 +3,7 @@ HybridRAG - State-of-the-art RAG with MongoDB Atlas + Voyage AI.
 
 This package provides a production-ready RAG system with:
 - MongoDB Atlas storage (vector + graph + KV)
-- Voyage AI embeddings (voyage-3-large) and reranking (rerank-2.5)
+- Voyage AI embeddings (voyage-4-large) and reranking (rerank-2.5)
 - Multi-provider LLM support (Gemini, Claude, OpenAI)
 - Knowledge graph construction and querying
 - Entity Boosting enhancement
@@ -96,6 +96,7 @@ from .memory import ConversationMemory, ConversationSession
 # Evaluation exports (RAGAS)
 try:
     from .evaluation import RAGEvaluator, run_evaluation
+
     _RAGAS_AVAILABLE = True
 except ImportError:
     _RAGAS_AVAILABLE = False
@@ -119,7 +120,9 @@ from .prompts import (
 def run_cli():
     """Run the HybridRAG CLI."""
     from .cli import run_cli as _run_cli
+
     return _run_cli()
+
 
 __version__ = "0.3.0"
 __all__ = [

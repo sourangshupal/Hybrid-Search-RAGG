@@ -30,6 +30,7 @@ from .graph_search import (
 )
 from .mongodb_hybrid_search import (
     MongoDBHybridSearchConfig,
+    extract_pipeline_score,
     hybrid_search_with_rank_fusion,
     manual_hybrid_search_with_rrf,
 )
@@ -101,32 +102,6 @@ class MixModeConfig:
     # Lexical prefiltering (MongoDB 8.2+)
     use_lexical_prefilters: bool = True  # Recommended for MongoDB 8.2+
     default_lexical_prefilter: LexicalPrefilterConfig | None = None
-
-
-def extract_pipeline_score(
-    score_details: dict[str, Any] | None, pipeline_name: str
-) -> float:
-    """
-    Extract per-pipeline score from scoreDetails.
-
-    Reference: JohnGUnderwood/atlas-hybrid-search
-
-    Args:
-        score_details: The scoreDetails object from $rankFusion
-        pipeline_name: Name of the pipeline ("vector" or "text")
-
-    Returns:
-        The score value for that pipeline, or 0.0 if not found
-    """
-    if not score_details or "details" not in score_details:
-        return 0.0
-
-    details = score_details.get("details", [])
-    for detail in details:
-        if detail.get("inputPipelineName") == pipeline_name:
-            return detail.get("value", 0.0)
-
-    return 0.0
 
 
 async def mix_mode_search(

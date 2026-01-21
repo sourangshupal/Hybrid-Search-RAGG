@@ -40,8 +40,8 @@ class Settings(BaseSettings):
         description="Voyage AI API key (required if embedding_provider=voyage)",
     )
     voyage_embedding_model: str = Field(
-        default="voyage-3-large",
-        description="Voyage embedding model (voyage-3-large, voyage-3, voyage-code-3)",
+        default="voyage-4-large",
+        description="Voyage embedding model (voyage-4-large, voyage-4, voyage-4-lite, voyage-code-3)",
     )
     voyage_context_model: str = Field(
         default="voyage-context-3",
@@ -54,25 +54,25 @@ class Settings(BaseSettings):
     voyage_rerank_instructions: str | None = Field(
         default=None,
         description="Optional custom default instructions for Voyage reranker. "
-                    "Applied to all queries unless overridden. Examples: "
-                    "'Prioritize recent sources' or 'Focus on technical documentation'. "
-                    "If None, uses intelligent mode-aware defaults when enabled.",
+        "Applied to all queries unless overridden. Examples: "
+        "'Prioritize recent sources' or 'Focus on technical documentation'. "
+        "If None, uses intelligent mode-aware defaults when enabled.",
     )
     enable_smart_rerank_instructions: bool = Field(
         default=True,
         description="Enable intelligent mode-aware default instructions. "
-                    "When True, automatically generates context-appropriate instructions "
-                    "based on query mode (mix, local, global, etc.). "
-                    "When False, no default instructions are applied unless "
-                    "voyage_rerank_instructions is set.",
+        "When True, automatically generates context-appropriate instructions "
+        "based on query mode (mix, local, global, etc.). "
+        "When False, no default instructions are applied unless "
+        "voyage_rerank_instructions is set.",
     )
 
     # Tavily AI (for web content extraction)
     tavily_api_key: SecretStr | None = Field(
         default=None,
         description="Tavily API key for web content extraction. "
-                    "Optional - enables ingest_url() and ingest_website() functionality. "
-                    "Get your key at https://tavily.com",
+        "Optional - enables ingest_url() and ingest_website() functionality. "
+        "Get your key at https://tavily.com",
     )
 
     # LLM Provider Selection
@@ -127,7 +127,9 @@ class Settings(BaseSettings):
     )
 
     # Query settings
-    default_query_mode: Literal["local", "global", "hybrid", "naive", "mix", "bypass"] = Field(
+    default_query_mode: Literal[
+        "local", "global", "hybrid", "naive", "mix", "bypass"
+    ] = Field(
         default="mix",
         description="Default query mode",
     )
@@ -178,7 +180,7 @@ class Settings(BaseSettings):
     # Embedding settings
     embedding_dim: int = Field(
         default=1024,
-        description="Embedding dimension (1024 for voyage-3-large)",
+        description="Embedding dimension (1024 default for voyage-4-large)",
     )
     max_token_size: int = Field(
         default=4096,

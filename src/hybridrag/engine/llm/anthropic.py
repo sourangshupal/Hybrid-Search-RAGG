@@ -247,7 +247,7 @@ async def anthropic_embed(
 
     Args:
         texts: List of text strings to embed
-        model: Voyage AI model name (e.g., "voyage-3", "voyage-3-large", "voyage-code-3")
+        model: Voyage AI model name (e.g., "voyage-4-large", "voyage-4", "voyage-code-3")
         base_url: Optional custom base URL (not used for Voyage AI)
         api_key: API key for Voyage AI (defaults to VOYAGE_API_KEY environment variable)
 
@@ -292,10 +292,25 @@ def get_available_embedding_models() -> dict[str, dict]:
     Returns a dictionary of available Voyage AI embedding models and their properties.
     """
     return {
+        "voyage-4-large": {
+            "context_length": 32000,
+            "dimension": 1024,
+            "description": "Best general-purpose and multilingual (Jan 2026)",
+        },
+        "voyage-4": {
+            "context_length": 32000,
+            "dimension": 1024,
+            "description": "General-purpose and multilingual (Jan 2026)",
+        },
+        "voyage-4-lite": {
+            "context_length": 32000,
+            "dimension": 1024,
+            "description": "Optimized for latency and cost (Jan 2026)",
+        },
         "voyage-3-large": {
             "context_length": 32000,
             "dimension": 1024,
-            "description": "Best general-purpose and multilingual",
+            "description": "Previous generation general-purpose",
         },
         "voyage-3": {
             "context_length": 32000,

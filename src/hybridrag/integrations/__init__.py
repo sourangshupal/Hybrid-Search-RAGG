@@ -2,7 +2,7 @@
 HybridRAG Integrations.
 
 Provider integrations for LLM and embeddings:
-- Voyage AI: Embeddings (voyage-3-large) and Reranking (rerank-2.5)
+- Voyage AI: Embeddings (voyage-4-large) and Reranking (rerank-2.5)
 - Anthropic: Claude LLM
 - OpenAI: GPT LLM and embeddings
 - Gemini: Google AI LLM and embeddings

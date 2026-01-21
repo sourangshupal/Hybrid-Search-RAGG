@@ -103,7 +103,7 @@
 │  EMBEDDINGS       │  LLM PROVIDERS    │  OBSERVABILITY   │  UI           │
 │  ────────────     │  ─────────────    │  ────────────    │  ──           │
 │  ✓ Voyage AI      │  ✓ Claude         │  ✓ Langfuse      │  ✓ Chainlit   │
-│  ✓ voyage-3-large │  ✓ GPT-4          │  ✓ RAGAS Eval    │  ✓ Rich CLI   │
+│  ✓ voyage-4-large │  ✓ GPT-4          │  ✓ RAGAS Eval    │  ✓ Rich CLI   │
 │  ✓ Reranking      │  ✓ Gemini         │                  │  ✓ REST API   │
 └─────────────────────────────────────────────────────────────────────────┘
 ```

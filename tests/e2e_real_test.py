@@ -91,14 +91,15 @@ async def test_voyage_embeddings() -> Any:
 
         # Generate real embedding
         result = client.embed(
-            texts=["What is MongoDB Atlas Vector Search?"], model="voyage-3-large"
+            texts=["What is MongoDB Atlas Vector Search?"], model="voyage-4-large"
         )
 
         embedding = result.embeddings[0]
 
         log_test(
             "Voyage AI Embeddings",
-            len(embedding) == 1024,  # voyage-3-large produces 1024-dim vectors
+            len(embedding)
+            == 1024,  # voyage-4-large produces 1024-dim vectors by default
             f"Generated embedding with {len(embedding)} dimensions",
             time.time() - start,
         )
@@ -400,11 +401,11 @@ async def test_full_rag_query(rag: Any) -> bool:
         )
 
         if has_answer:
-            print(f"\n{'='*60}")
+            print(f"\n{'=' * 60}")
             print("📝 LLM GENERATED ANSWER:")
-            print(f"{'='*60}")
+            print(f"{'=' * 60}")
             print(response[:500] + "..." if len(response) > 500 else response)
-            print(f"{'='*60}\n")
+            print(f"{'=' * 60}\n")
 
         return True
     except Exception as e:
@@ -442,16 +443,16 @@ async def test_query_with_sources(rag: Any) -> bool:
         )
 
         if has_answer:
-            print(f"\n{'='*60}")
+            print(f"\n{'=' * 60}")
             print("📝 ANSWER WITH SOURCES:")
-            print(f"{'='*60}")
+            print(f"{'=' * 60}")
             print(
                 f"Answer: {result['answer'][:300]}..."
                 if len(result.get("answer", "")) > 300
                 else f"Answer: {result.get('answer', 'N/A')}"
             )
             print(f"\nContext length: {len(result.get('context', ''))} characters")
-            print(f"{'='*60}\n")
+            print(f"{'=' * 60}\n")
 
         return True
     except Exception as e:

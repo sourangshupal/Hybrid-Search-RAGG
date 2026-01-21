@@ -28,6 +28,7 @@ from ..engine import QueryParam as _QueryParam
 @dataclass
 class QueryParam:
     """Query parameters for RAG operations."""
+
     mode: Literal["local", "global", "hybrid", "naive", "mix", "bypass"] = "mix"
     top_k: int = 60
     chunk_top_k: int = 10
@@ -43,6 +44,7 @@ class QueryParam:
             enable_rerank=self.enable_rerank,
             only_need_context=self.only_need_context,
         )
+
 
 from ..config.settings import Settings, get_settings
 from ..enhancements.entity_boosting import create_boosted_rerank_func
@@ -69,20 +71,26 @@ logger = logging.getLogger("hybridrag.core")
 logger.setLevel(logging.INFO)
 
 
-def _create_embedding_func(settings: Settings) -> tuple[Callable[[list[str]], np.ndarray], int]:
+def _create_embedding_func(
+    settings: Settings,
+) -> tuple[Callable[[list[str]], np.ndarray], int]:
     """Create Voyage AI embedding function - VOYAGE ONLY, no fallbacks."""
     from ..integrations.voyage import create_embedding_func
 
     if not settings.voyage_api_key:
-        raise ValueError("VOYAGE_API_KEY is REQUIRED - Voyage AI is the only supported embedding provider")
+        raise ValueError(
+            "VOYAGE_API_KEY is REQUIRED - Voyage AI is the only supported embedding provider"
+        )
 
     embed_func = create_embedding_func(
         api_key=settings.voyage_api_key.get_secret_value(),
         model=settings.voyage_embedding_model,
         batch_size=settings.embedding_batch_size,
     )
-    logger.info(f"[INIT] Voyage embedding configured: model={settings.voyage_embedding_model}, dim=1024, batch_size={settings.embedding_batch_size}")
-    return embed_func, 1024  # voyage-3-large dimension
+    logger.info(
+        f"[INIT] Voyage embedding configured: model={settings.voyage_embedding_model}, dim=1024, batch_size={settings.embedding_batch_size}"
+    )
+    return embed_func, 1024  # voyage-4-large default dimension
 
 
 def _create_llm_func(settings: Settings) -> Callable[..., str]:
@@ -95,7 +103,9 @@ def _create_llm_func(settings: Settings) -> Callable[..., str]:
 
         if not settings.anthropic_api_key:
             raise ValueError("ANTHROPIC_API_KEY required when llm_provider=anthropic")
-        logger.info(f"[INIT] Anthropic LLM configured: model={settings.anthropic_model}")
+        logger.info(
+            f"[INIT] Anthropic LLM configured: model={settings.anthropic_model}"
+        )
         return create_llm_func(
             api_key=settings.anthropic_api_key.get_secret_value(),
             model=settings.anthropic_model,
@@ -136,7 +146,7 @@ class HybridRAG:
     Features:
     - MongoDB Atlas storage (vector + graph + KV)
     - Multiple LLM providers: Anthropic Claude, OpenAI GPT, Google Gemini
-    - Voyage AI embeddings (voyage-3-large)
+    - Voyage AI embeddings (voyage-4-large)
     - Voyage AI reranking (rerank-2.5)
     - Knowledge graph construction and querying
     - Implicit expansion (semantic entity discovery)
@@ -179,7 +189,9 @@ class HybridRAG:
         # Set MongoDB environment variables
         os.environ["MONGO_URI"] = self.settings.mongodb_uri.get_secret_value()
         os.environ["MONGO_DATABASE"] = self.settings.mongodb_database
-        logger.info(f"[INIT] MongoDB configured: database={self.settings.mongodb_database}")
+        logger.info(
+            f"[INIT] MongoDB configured: database={self.settings.mongodb_database}"
+        )
 
         # Create embedding function based on provider
         logger.info("[INIT] Creating embedding function...")
@@ -190,7 +202,9 @@ class HybridRAG:
             max_token_size=self.settings.max_token_size,
             func=embed_func,
         )
-        logger.info(f"[INIT] EmbeddingFunc created: dim={embedding_dim}, max_tokens={self.settings.max_token_size}")
+        logger.info(
+            f"[INIT] EmbeddingFunc created: dim={embedding_dim}, max_tokens={self.settings.max_token_size}"
+        )
 
         # Create rerank function (Voyage AI - best quality)
         rerank_func = None
@@ -198,14 +212,18 @@ class HybridRAG:
             from ..integrations.rerank_instructions import get_rerank_instructions
             from ..integrations.voyage import create_rerank_func
 
-            logger.info(f"[INIT] Creating Voyage reranker: model={self.settings.voyage_rerank_model}")
+            logger.info(
+                f"[INIT] Creating Voyage reranker: model={self.settings.voyage_rerank_model}"
+            )
 
             # Generate default instructions based on settings
             default_instructions = None
             if self.settings.voyage_rerank_instructions:
                 # Custom global instructions take precedence
                 default_instructions = self.settings.voyage_rerank_instructions
-                logger.info(f"[INIT] Using custom rerank instructions: '{default_instructions[:50]}...'")
+                logger.info(
+                    f"[INIT] Using custom rerank instructions: '{default_instructions[:50]}...'"
+                )
             elif self.settings.enable_smart_rerank_instructions:
                 # Use intelligent defaults for default query mode
                 default_instructions = get_rerank_instructions(
@@ -213,7 +231,9 @@ class HybridRAG:
                     enable_smart_defaults=True,
                 )
                 if default_instructions:
-                    logger.info(f"[INIT] Using smart rerank instructions for mode '{self.settings.default_query_mode}': '{default_instructions[:50]}...'")
+                    logger.info(
+                        f"[INIT] Using smart rerank instructions for mode '{self.settings.default_query_mode}': '{default_instructions[:50]}...'"
+                    )
 
             base_rerank = create_rerank_func(
                 api_key=self.settings.voyage_api_key.get_secret_value(),
@@ -223,7 +243,9 @@ class HybridRAG:
 
             # Wrap with entity boosting if enabled
             if self.settings.enable_entity_boosting:
-                logger.info(f"[INIT] Wrapping with entity boosting: weight={self.settings.entity_boost_weight}")
+                logger.info(
+                    f"[INIT] Wrapping with entity boosting: weight={self.settings.entity_boost_weight}"
+                )
                 rerank_func = create_boosted_rerank_func(
                     base_rerank_func=base_rerank,
                     boost_weight=self.settings.entity_boost_weight,
@@ -259,10 +281,13 @@ class HybridRAG:
         # Initialize all storage backends (MongoDB collections)
         logger.info("[INIT] Initializing storage backends...")
         await self._rag_engine.initialize_storages()
-        logger.info("[INIT] Storage backends initialized (KV, Vector, Graph, DocStatus)")
+        logger.info(
+            "[INIT] Storage backends initialized (KV, Vector, Graph, DocStatus)"
+        )
 
         # Initialize pipeline status
         from ..engine.kg.shared_storage import initialize_pipeline_status
+
         logger.info("[INIT] Initializing pipeline status...")
         await initialize_pipeline_status()
 
@@ -276,7 +301,9 @@ class HybridRAG:
             llm_func=llm_func,  # Enable summarization for compaction
         )
         await self._memory.initialize()
-        logger.info("[INIT] Conversation memory initialized (with self-compaction enabled)")
+        logger.info(
+            "[INIT] Conversation memory initialized (with self-compaction enabled)"
+        )
 
         self._initialized = True
         logger.info("[INIT] ========== HybridRAG Initialization Complete ==========")
@@ -373,6 +400,7 @@ class HybridRAG:
             logger.info(f"[INSERT] File paths: {file_paths}")
 
         import time as _time
+
         start_time = _time.time()
 
         try:
@@ -493,6 +521,7 @@ class HybridRAG:
             )
 
             import time as _time
+
             start_time = _time.time()
 
             results = await pipeline.ingest_folder(folder_path, progress_callback)
@@ -506,7 +535,9 @@ class HybridRAG:
             total_errors = sum(len(r.errors) for r in results)
 
             logger.info("[INGEST_FILES] ========== File Ingestion Complete ==========")
-            logger.info(f"[INGEST_FILES] Documents: {successful}/{total_docs} successful")
+            logger.info(
+                f"[INGEST_FILES] Documents: {successful}/{total_docs} successful"
+            )
             logger.info(f"[INGEST_FILES] Total chunks: {total_chunks}")
             logger.info(f"[INGEST_FILES] Duration: {duration:.2f}s")
             if total_errors > 0:
@@ -515,7 +546,9 @@ class HybridRAG:
             # Now insert the chunks into the main RAG system for KG extraction
             # Read back the chunks from MongoDB and insert them
             if successful > 0:
-                logger.info("[INGEST_FILES] Inserting chunks into RAG for KG extraction...")
+                logger.info(
+                    "[INGEST_FILES] Inserting chunks into RAG for KG extraction..."
+                )
                 chunks_col = db["ingested_chunks"]
                 cursor = chunks_col.find({})
                 chunks_data = await cursor.to_list(length=None)
@@ -523,14 +556,19 @@ class HybridRAG:
                 if chunks_data:
                     # Extract content and file paths for RAG insertion
                     contents = [c["content"] for c in chunks_data]
-                    file_paths = [c.get("metadata", {}).get("source", "unknown") for c in chunks_data]
+                    file_paths = [
+                        c.get("metadata", {}).get("source", "unknown")
+                        for c in chunks_data
+                    ]
 
                     # Insert into main RAG (this builds the knowledge graph)
                     await self.insert(
                         documents=contents,
                         file_paths=file_paths,
                     )
-                    logger.info(f"[INGEST_FILES] Inserted {len(contents)} chunks into RAG system")
+                    logger.info(
+                        f"[INGEST_FILES] Inserted {len(contents)} chunks into RAG system"
+                    )
 
         finally:
             # Always close the motor client to prevent connection leaks
@@ -668,6 +706,7 @@ class HybridRAG:
             )
 
         import time as _time
+
         start_time = _time.time()
 
         try:
@@ -695,9 +734,7 @@ class HybridRAG:
             # Use existing ingestion pipeline to process the document
             from motor.motor_asyncio import AsyncIOMotorClient
 
-            client = AsyncIOMotorClient(
-                self.settings.mongodb_uri.get_secret_value()
-            )
+            client = AsyncIOMotorClient(self.settings.mongodb_uri.get_secret_value())
             db = client[self.settings.mongodb_database]
 
             # Create embedding function wrapper
@@ -756,8 +793,7 @@ class HybridRAG:
                 if chunks_data:
                     contents = [c["content"] for c in chunks_data]
                     sources = [
-                        c.get("metadata", {}).get("source", url)
-                        for c in chunks_data
+                        c.get("metadata", {}).get("source", url) for c in chunks_data
                     ]
 
                     await self.insert(documents=contents, file_paths=sources)
@@ -916,9 +952,7 @@ class HybridRAG:
         """
         self._ensure_initialized()
 
-        logger.info(
-            "[INGEST_WEBSITE] ========== Starting Website Crawl =========="
-        )
+        logger.info("[INGEST_WEBSITE] ========== Starting Website Crawl ==========")
         logger.info(
             f"[INGEST_WEBSITE] URL: {url}, max_pages={max_pages}, max_depth={max_depth}"
         )
@@ -940,6 +974,7 @@ class HybridRAG:
             ]
 
         import time as _time
+
         start_time = _time.time()
 
         try:
@@ -988,9 +1023,7 @@ class HybridRAG:
             # Use existing ingestion pipeline to process each document
             from motor.motor_asyncio import AsyncIOMotorClient
 
-            client = AsyncIOMotorClient(
-                self.settings.mongodb_uri.get_secret_value()
-            )
+            client = AsyncIOMotorClient(self.settings.mongodb_uri.get_secret_value())
             db = client[self.settings.mongodb_database]
 
             # Create embedding function wrapper
@@ -1060,8 +1093,7 @@ class HybridRAG:
                 )
                 contents = [c["content"] for c in all_chunks_data]
                 sources = [
-                    c.get("metadata", {}).get("source", url)
-                    for c in all_chunks_data
+                    c.get("metadata", {}).get("source", url) for c in all_chunks_data
                 ]
 
                 await self.insert(documents=contents, file_paths=sources)
@@ -1077,12 +1109,8 @@ class HybridRAG:
             total_chunks = sum(r.chunks_created for r in results)
             total_errors = sum(len(r.errors) for r in results)
 
-            logger.info(
-                "[INGEST_WEBSITE] ========== Website Crawl Complete =========="
-            )
-            logger.info(
-                f"[INGEST_WEBSITE] Pages: {successful}/{total_docs} successful"
-            )
+            logger.info("[INGEST_WEBSITE] ========== Website Crawl Complete ==========")
+            logger.info(f"[INGEST_WEBSITE] Pages: {successful}/{total_docs} successful")
             logger.info(f"[INGEST_WEBSITE] Total chunks: {total_chunks}")
             logger.info(f"[INGEST_WEBSITE] Duration: {duration:.2f}s")
             if total_errors > 0:
@@ -1211,7 +1239,8 @@ class HybridRAG:
     async def query(
         self,
         query: str,
-        mode: Literal["local", "global", "hybrid", "naive", "mix", "bypass"] | None = None,
+        mode: Literal["local", "global", "hybrid", "naive", "mix", "bypass"]
+        | None = None,
         top_k: int | None = None,
         rerank_top_k: int | None = None,
         enable_rerank: bool | None = None,
@@ -1239,16 +1268,24 @@ class HybridRAG:
         resolved_mode = mode or self.settings.default_query_mode
         resolved_top_k = top_k or self.settings.default_top_k
         resolved_rerank_top_k = rerank_top_k or self.settings.default_rerank_top_k
-        resolved_enable_rerank = enable_rerank if enable_rerank is not None else self.settings.enable_rerank
+        resolved_enable_rerank = (
+            enable_rerank if enable_rerank is not None else self.settings.enable_rerank
+        )
 
         logger.info("[QUERY] ========== Starting Query ==========")
-        logger.info(f"[QUERY] Query: '{query[:100]}{'...' if len(query) > 100 else ''}'")
-        logger.info(f"[QUERY] Mode: {resolved_mode}, top_k: {resolved_top_k}, rerank_top_k: {resolved_rerank_top_k}")
-        logger.info(f"[QUERY] Rerank enabled: {resolved_enable_rerank}, only_context: {only_context}")
+        logger.info(
+            f"[QUERY] Query: '{query[:100]}{'...' if len(query) > 100 else ''}'"
+        )
+        logger.info(
+            f"[QUERY] Mode: {resolved_mode}, top_k: {resolved_top_k}, rerank_top_k: {resolved_rerank_top_k}"
+        )
+        logger.info(
+            f"[QUERY] Rerank enabled: {resolved_enable_rerank}, only_context: {only_context}"
+        )
 
         # Apply implicit expansion if enabled
         expanded_query = query
-        if self.settings.enable_implicit_expansion and hasattr(rag, 'entities_vdb'):
+        if self.settings.enable_implicit_expansion and hasattr(rag, "entities_vdb"):
             expanded_query = await self._expand_query_with_entities(query, rag)
             if expanded_query != query:
                 logger.info("[QUERY] Implicit expansion applied, query expanded")
@@ -1272,7 +1309,9 @@ class HybridRAG:
 
             # Handle None response gracefully
             if response is None:
-                logger.warning("[QUERY] RAG engine returned None response - possible LLM error or empty results")
+                logger.warning(
+                    "[QUERY] RAG engine returned None response - possible LLM error or empty results"
+                )
                 response = ""
 
             response_len = len(response)
@@ -1286,7 +1325,8 @@ class HybridRAG:
     async def query_with_sources(
         self,
         query: str,
-        mode: Literal["local", "global", "hybrid", "naive", "mix", "bypass"] | None = None,
+        mode: Literal["local", "global", "hybrid", "naive", "mix", "bypass"]
+        | None = None,
         top_k: int | None = None,
     ) -> dict[str, Any]:
         """
@@ -1306,7 +1346,9 @@ class HybridRAG:
         self._ensure_initialized()
         resolved_mode = mode or self.settings.default_query_mode
 
-        logger.info(f"[QUERY_WITH_SOURCES] Starting query with sources: mode={resolved_mode}")
+        logger.info(
+            f"[QUERY_WITH_SOURCES] Starting query with sources: mode={resolved_mode}"
+        )
 
         # Step 1: Get context (single retrieval)
         logger.info("[QUERY_WITH_SOURCES] Step 1: Fetching context...")
@@ -1371,7 +1413,8 @@ Please provide a comprehensive answer based only on the information provided in 
         self,
         query: str,
         session_id: str,
-        mode: Literal["local", "global", "hybrid", "naive", "mix", "bypass"] | None = None,
+        mode: Literal["local", "global", "hybrid", "naive", "mix", "bypass"]
+        | None = None,
         top_k: int | None = None,
         max_history_messages: int = 10,
     ) -> dict[str, Any]:
@@ -1408,7 +1451,9 @@ Please provide a comprehensive answer based only on the information provided in 
 
         # Get conversation history
         history = await self._memory.get_history(session_id, max_history_messages)
-        history_context = await self._memory.get_context_string(session_id, max_history_messages)
+        history_context = await self._memory.get_context_string(
+            session_id, max_history_messages
+        )
 
         logger.info(f"[QUERY_WITH_MEMORY] History messages: {len(history)}")
 
@@ -1580,7 +1625,9 @@ Provide a helpful, comprehensive answer."""
             "llm_model": llm_model,
             "embedding_provider": self.settings.embedding_provider,
             "embedding_model": embedding_model,
-            "rerank_model": self.settings.voyage_rerank_model if self.settings.voyage_api_key else None,
+            "rerank_model": self.settings.voyage_rerank_model
+            if self.settings.voyage_api_key
+            else None,
             "enhancements": {
                 "implicit_expansion": self.settings.enable_implicit_expansion,
                 "entity_boosting": self.settings.enable_entity_boosting,
@@ -1625,18 +1672,31 @@ Provide a helpful, comprehensive answer."""
             stats["chunks"] = chunk_count
 
             # Get recent documents (last 10)
-            cursor = rag.doc_status._data.find(
-                {},
-                {"_id": 0, "id": 1, "file_path": 1, "status": 1, "created_at": 1, "chunks_count": 1}
-            ).sort("created_at", -1).limit(10)
+            cursor = (
+                rag.doc_status._data.find(
+                    {},
+                    {
+                        "_id": 0,
+                        "id": 1,
+                        "file_path": 1,
+                        "status": 1,
+                        "created_at": 1,
+                        "chunks_count": 1,
+                    },
+                )
+                .sort("created_at", -1)
+                .limit(10)
+            )
 
             async for doc in cursor:
-                stats["recent_documents"].append({
-                    "id": doc.get("id", "unknown")[:12] + "...",
-                    "file": doc.get("file_path", "unknown"),
-                    "status": doc.get("status", "unknown"),
-                    "chunks": doc.get("chunks_count", 0),
-                })
+                stats["recent_documents"].append(
+                    {
+                        "id": doc.get("id", "unknown")[:12] + "...",
+                        "file": doc.get("file_path", "unknown"),
+                        "status": doc.get("status", "unknown"),
+                        "chunks": doc.get("chunks_count", 0),
+                    }
+                )
 
         except Exception as e:
             logger.error(f"[STATS] Error getting knowledge base stats: {e}")

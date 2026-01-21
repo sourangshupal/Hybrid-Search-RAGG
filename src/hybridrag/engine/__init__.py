@@ -8,7 +8,7 @@ from .base_engine import BaseRAGEngine
 
 RAGEngine = BaseRAGEngine
 from .base import EmbeddingFunc, QueryParam
-from .base_engine import chunking_by_docling, chunking_by_token_size
+from .operate import chunking_by_docling, chunking_by_token_size
 
 __all__ = [
     "BaseRAGEngine",

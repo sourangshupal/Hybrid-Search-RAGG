@@ -130,11 +130,16 @@ def build_lexical_prefilters(config: LexicalPrefilterConfig) -> dict[str, Any]:
     filter_clauses: list[dict[str, Any]] = []
 
     # Text filters
+    # Per PEP 589: TypedDict total=False makes keys optional, validate before access
     for text_filter in config.text_filters:
+        path = text_filter.get("path")
+        query = text_filter.get("query")
+        if not path or not query:
+            continue  # Skip invalid filter (missing required fields)
         clause: dict[str, Any] = {
             "text": {
-                "path": text_filter["path"],
-                "query": text_filter["query"],
+                "path": path,
+                "query": query,
             }
         }
         if "fuzzy" in text_filter:
@@ -145,10 +150,14 @@ def build_lexical_prefilters(config: LexicalPrefilterConfig) -> dict[str, Any]:
 
     # Fuzzy filters
     for fuzzy_filter in config.fuzzy_filters:
+        path = fuzzy_filter.get("path")
+        query = fuzzy_filter.get("query")
+        if not path or not query:
+            continue  # Skip invalid filter (missing required fields)
         clause = {
             "text": {
-                "path": fuzzy_filter["path"],
-                "query": fuzzy_filter["query"],
+                "path": path,
+                "query": query,
                 "fuzzy": {
                     "maxEdits": fuzzy_filter.get("maxEdits", 2),
                     "prefixLength": fuzzy_filter.get("prefixLength", 0),
@@ -160,10 +169,14 @@ def build_lexical_prefilters(config: LexicalPrefilterConfig) -> dict[str, Any]:
 
     # Phrase filters
     for phrase_filter in config.phrase_filters:
+        path = phrase_filter.get("path")
+        query = phrase_filter.get("query")
+        if not path or not query:
+            continue  # Skip invalid filter (missing required fields)
         clause = {
             "phrase": {
-                "path": phrase_filter["path"],
-                "query": phrase_filter["query"],
+                "path": path,
+                "query": query,
             }
         }
         if "slop" in phrase_filter:
@@ -172,10 +185,14 @@ def build_lexical_prefilters(config: LexicalPrefilterConfig) -> dict[str, Any]:
 
     # Wildcard filters
     for wildcard_filter in config.wildcard_filters:
+        path = wildcard_filter.get("path")
+        query = wildcard_filter.get("query")
+        if not path or not query:
+            continue  # Skip invalid filter (missing required fields)
         clause = {
             "wildcard": {
-                "path": wildcard_filter["path"],
-                "query": wildcard_filter["query"],
+                "path": path,
+                "query": query,
             }
         }
         if wildcard_filter.get("allowAnalyzedField"):
@@ -192,25 +209,32 @@ def build_lexical_prefilters(config: LexicalPrefilterConfig) -> dict[str, Any]:
 
     # Geo filters
     for geo_filter in config.geo_filters:
+        path = geo_filter.get("path")
+        geometry = geo_filter.get("geometry")
+        if not path or not geometry:
+            continue  # Skip invalid filter (missing required fields)
         filter_clauses.append(
             {
                 "geoWithin": {
-                    "path": geo_filter["path"],
-                    "geometry": geo_filter["geometry"],
+                    "path": path,
+                    "geometry": geometry,
                 }
             }
         )
 
     # QueryString filter
     if config.query_string_filter:
-        filter_clauses.append(
-            {
-                "queryString": {
-                    "defaultPath": config.query_string_filter["defaultPath"],
-                    "query": config.query_string_filter["query"],
+        default_path = config.query_string_filter.get("defaultPath")
+        query = config.query_string_filter.get("query")
+        if default_path and query:  # Only add if both required fields present
+            filter_clauses.append(
+                {
+                    "queryString": {
+                        "defaultPath": default_path,
+                        "query": query,
+                    }
                 }
-            }
-        )
+            )
 
     # Equality filters (using equals operator)
     for path, value in config.equality_filters.items():

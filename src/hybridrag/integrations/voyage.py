@@ -29,14 +29,14 @@ class VoyageEmbedder:
     Voyage AI embedding wrapper with support for contextualized embeddings.
 
     Features:
-    - Standard embeddings with voyage-3-large
+    - Standard embeddings with voyage-4-large
     - Contextualized embeddings with voyage-context-3 (+13% recall)
     - Async support for better performance
     - Batching for efficiency
     """
 
     api_key: str
-    embedding_model: str = "voyage-3-large"
+    embedding_model: str = "voyage-4-large"
     context_model: str = "voyage-context-3"
     batch_size: int = 128
 
@@ -59,10 +59,14 @@ class VoyageEmbedder:
         Returns:
             Numpy array of embeddings (n, 1024)
         """
-        logger.info(f"[EMBEDDING] Starting embedding of {len(texts)} texts (type={input_type}, model={self.embedding_model})")
+        logger.info(
+            f"[EMBEDDING] Starting embedding of {len(texts)} texts (type={input_type}, model={self.embedding_model})"
+        )
 
         if not texts:
-            logger.warning("[EMBEDDING] Empty texts list provided, returning empty array")
+            logger.warning(
+                "[EMBEDDING] Empty texts list provided, returning empty array"
+            )
             return np.array([], dtype=np.float32)
 
         all_embeddings: list[list[float]] = []
@@ -71,7 +75,9 @@ class VoyageEmbedder:
         for i in range(0, len(texts), self.batch_size):
             batch_num = i // self.batch_size + 1
             batch = list(texts[i : i + self.batch_size])
-            logger.info(f"[EMBEDDING] Processing batch {batch_num}/{total_batches} ({len(batch)} texts)")
+            logger.info(
+                f"[EMBEDDING] Processing batch {batch_num}/{total_batches} ({len(batch)} texts)"
+            )
 
             result = await self._async_client.embed(
                 batch,
@@ -79,10 +85,14 @@ class VoyageEmbedder:
                 input_type=input_type,
             )
             all_embeddings.extend(result.embeddings)
-            logger.debug(f"[EMBEDDING] Batch {batch_num} complete, got {len(result.embeddings)} embeddings")
+            logger.debug(
+                f"[EMBEDDING] Batch {batch_num} complete, got {len(result.embeddings)} embeddings"
+            )
 
         embeddings_array = np.array(all_embeddings, dtype=np.float32)
-        logger.info(f"[EMBEDDING] Complete: {embeddings_array.shape[0]} embeddings of dimension {embeddings_array.shape[1] if len(embeddings_array.shape) > 1 else 'N/A'}")
+        logger.info(
+            f"[EMBEDDING] Complete: {embeddings_array.shape[0]} embeddings of dimension {embeddings_array.shape[1] if len(embeddings_array.shape) > 1 else 'N/A'}"
+        )
         return embeddings_array
 
     def embed_sync(
@@ -208,10 +218,14 @@ class VoyageReranker:
         Returns:
             List of dicts with 'index', 'document', 'relevance_score'
         """
-        logger.info(f"[RERANK] Starting reranking: query='{query[:50]}...', {len(documents)} documents, top_n={top_n}, model={self.model}")
+        logger.info(
+            f"[RERANK] Starting reranking: query='{query[:50]}...', {len(documents)} documents, top_n={top_n}, model={self.model}"
+        )
 
         if not documents:
-            logger.warning("[RERANK] Empty documents list provided, returning empty list")
+            logger.warning(
+                "[RERANK] Empty documents list provided, returning empty list"
+            )
             return []
 
         # Format query with instructions if provided
@@ -221,7 +235,9 @@ class VoyageReranker:
             instructions_clean = instructions.strip()
             if instructions_clean:
                 formatted_query = f"{instructions_clean}\nQuery: {query}"
-                logger.debug(f"[RERANK] Instructions applied: '{instructions_clean[:50]}...'")
+                logger.debug(
+                    f"[RERANK] Instructions applied: '{instructions_clean[:50]}...'"
+                )
 
         try:
             result = await self._async_client.rerank(
@@ -242,7 +258,9 @@ class VoyageReranker:
 
             logger.info(f"[RERANK] Complete: {len(reranked)} results returned")
             for i, r in enumerate(reranked[:3]):
-                logger.debug(f"[RERANK] Top {i+1}: idx={r['index']}, score={r['relevance_score']:.4f}")
+                logger.debug(
+                    f"[RERANK] Top {i + 1}: idx={r['index']}, score={r['relevance_score']:.4f}"
+                )
 
             return reranked
         except Exception as e:
@@ -300,7 +318,7 @@ class VoyageReranker:
 
 def create_embedding_func(
     api_key: str,
-    model: str = "voyage-3-large",
+    model: str = "voyage-4-large",
     batch_size: int = 128,
 ) -> Callable[[list[str]], np.ndarray]:
     """
@@ -352,9 +370,15 @@ def create_rerank_func(
         **kwargs,
     ) -> list[dict]:
         # Use per-query instructions if provided, otherwise use default
-        final_instructions = instructions if instructions is not None else default_instructions
-        logger.info(f"[RERANK_FUNC] Called with query='{query[:50]}...', {len(documents)} docs, top_n={top_n}, has_instructions={final_instructions is not None}")
-        result = await reranker.rerank_async(query, documents, top_n, instructions=final_instructions)
+        final_instructions = (
+            instructions if instructions is not None else default_instructions
+        )
+        logger.info(
+            f"[RERANK_FUNC] Called with query='{query[:50]}...', {len(documents)} docs, top_n={top_n}, has_instructions={final_instructions is not None}"
+        )
+        result = await reranker.rerank_async(
+            query, documents, top_n, instructions=final_instructions
+        )
         logger.info(f"[RERANK_FUNC] Returning {len(result)} results")
         return result
 

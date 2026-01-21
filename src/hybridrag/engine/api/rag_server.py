@@ -2,67 +2,66 @@
 HybridRAG FastAPI Server
 """
 
-from fastapi import FastAPI, Depends, HTTPException, Request
+import configparser
+import logging
+import logging.config
+import os
+import sys
+from contextlib import asynccontextmanager
+from pathlib import Path
+
+import pipmaster as pm
+import uvicorn
+from ascii_colors import ASCIIColors
+from dotenv import load_dotenv
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import (
     get_swagger_ui_html,
     get_swagger_ui_oauth2_redirect_html,
 )
-import os
-import logging
-import logging.config
-import sys
-import uvicorn
-import pipmaster as pm
+from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import RedirectResponse
-from pathlib import Path
-import configparser
-from ascii_colors import ASCIIColors
-from fastapi.middleware.cors import CORSMiddleware
-from contextlib import asynccontextmanager
-from dotenv import load_dotenv
-from .api.utils_api import (
-    get_combined_auth_dependency,
-    display_splash_screen,
-    check_env_file,
-)
-from .config import (
-    global_args,
-    update_uvicorn_mode_config,
-    get_default_host,
-)
-from .utils import get_env_value
-from . import RAGEngine, __version__ as core_version
+
+from . import RAGEngine
+from . import __version__ as core_version
 from .api import __api_version__
-from .types import GPTKeywordExtractionFormat
-from .utils import EmbeddingFunc
-from .constants import (
-    DEFAULT_LOG_MAX_BYTES,
-    DEFAULT_LOG_BACKUP_COUNT,
-    DEFAULT_LOG_FILENAME,
-    DEFAULT_LLM_TIMEOUT,
-    DEFAULT_EMBEDDING_TIMEOUT,
-)
+from .api.auth import auth_handler
 from .api.routers.document_routes import (
     DocumentManager,
     create_document_routes,
 )
-from .api.routers.query_routes import create_query_routes
 from .api.routers.graph_routes import create_graph_routes
 from .api.routers.ollama_api import OllamaAPI
-
-from .utils import logger, set_verbose_debug
+from .api.routers.query_routes import create_query_routes
+from .api.utils_api import (
+    check_env_file,
+    display_splash_screen,
+    get_combined_auth_dependency,
+)
+from .config import (
+    get_default_host,
+    global_args,
+    update_uvicorn_mode_config,
+)
+from .constants import (
+    DEFAULT_EMBEDDING_TIMEOUT,
+    DEFAULT_LLM_TIMEOUT,
+    DEFAULT_LOG_BACKUP_COUNT,
+    DEFAULT_LOG_FILENAME,
+    DEFAULT_LOG_MAX_BYTES,
+)
 from .kg.shared_storage import (
-    get_namespace_data,
-    get_default_workspace,
     # set_default_workspace,
     cleanup_keyed_lock,
     finalize_share_data,
+    get_default_workspace,
+    get_namespace_data,
 )
-from fastapi.security import OAuth2PasswordRequestForm
-from .api.auth import auth_handler
+from .types import GPTKeywordExtractionFormat
+from .utils import EmbeddingFunc, get_env_value, logger, set_verbose_debug
 
 # use the .env that is inside the current folder
 # allows to use different .env file for each hybridrag instance
@@ -975,7 +974,7 @@ def create_app(args):
     # Configure rerank function based on args.rerank_bindingparameter
     rerank_model_func = None
     if args.rerank_binding != "null":
-        from .rerank import cohere_rerank, jina_rerank, ali_rerank
+        from .rerank import ali_rerank, cohere_rerank, jina_rerank
 
         # Map rerank binding to corresponding function
         rerank_functions = {

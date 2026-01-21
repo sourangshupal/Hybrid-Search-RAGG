@@ -1,45 +1,40 @@
 from __future__ import annotations
-import weakref
-
-import sys
 
 import asyncio
-import html
 import csv
+import html
 import json
 import logging
 import logging.handlers
 import os
 import re
+import sys
 import time
 import uuid
+import weakref
+from collections.abc import Callable, Collection, Iterable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from functools import wraps
 from hashlib import md5
 from typing import (
+    TYPE_CHECKING,
     Any,
     Protocol,
-    Callable,
-    TYPE_CHECKING,
-    List,
-    Optional,
-    Iterable,
-    Sequence,
-    Collection,
 )
+
 import numpy as np
 from dotenv import load_dotenv
 
 from .constants import (
-    DEFAULT_LOG_MAX_BYTES,
     DEFAULT_LOG_BACKUP_COUNT,
     DEFAULT_LOG_FILENAME,
-    GRAPH_FIELD_SEP,
+    DEFAULT_LOG_MAX_BYTES,
     DEFAULT_MAX_TOTAL_TOKENS,
     DEFAULT_SOURCE_IDS_LIMIT_METHOD,
-    VALID_SOURCE_IDS_LIMIT_METHODS,
+    GRAPH_FIELD_SEP,
     SOURCE_IDS_LIMIT_METHOD_FIFO,
+    VALID_SOURCE_IDS_LIMIT_METHODS,
 )
 
 # Precompile regex pattern for JSON sanitization (module-level, compiled once)
@@ -134,7 +129,7 @@ async def safe_vdb_operation_with_exception(
     entity_name: str = "",
     max_retries: int = 3,
     retry_delay: float = 0.2,
-    logger_func: Optional[Callable] = None,
+    logger_func: Callable | None = None,
 ) -> None:
     """
     Safely execute vector database operations with retry mechanism and exception handling.
@@ -462,7 +457,7 @@ class EmbeddingFunc:
 
         # Optional: Verify vector count matches input text count
         actual_vectors = total_elements // expected_dim
-        if args and isinstance(args[0], (list, tuple)):
+        if args and isinstance(args[0], list | tuple):
             expected_vectors = len(args[0])
             if actual_vectors != expected_vectors:
                 raise ValueError(
@@ -635,7 +630,7 @@ def priority_limit_async_func_call(
                                 args,
                                 kwargs,
                             ) = await asyncio.wait_for(queue.get(), timeout=1.0)
-                        except asyncio.TimeoutError:
+                        except TimeoutError:
                             continue
 
                         # Get task state and mark worker as started
@@ -673,7 +668,7 @@ def priority_limit_async_func_call(
                             if not task_state.future.done():
                                 task_state.future.set_result(result)
 
-                        except asyncio.TimeoutError:
+                        except TimeoutError:
                             # Worker-level timeout (max_execution_timeout exceeded)
                             logger.warning(
                                 f"{queue_name}: Worker timeout for task {task_id} after {max_execution_timeout}s"
@@ -853,7 +848,7 @@ def priority_limit_async_func_call(
 
             # Cancel all pending tasks
             async with task_states_lock:
-                for task_id, task_state in list(task_states.items()):
+                for _task_id, task_state in list(task_states.items()):
                     if not task_state.future.done():
                         task_state.future.cancel()
                 task_states.clear()
@@ -861,7 +856,7 @@ def priority_limit_async_func_call(
             # Wait for queue to empty with timeout
             try:
                 await asyncio.wait_for(queue.join(), timeout=5.0)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 logger.warning(
                     f"{queue_name}: Timeout waiting for queue to empty during shutdown"
                 )
@@ -944,7 +939,7 @@ def priority_limit_async_func_call(
                         await queue.put(
                             (_priority, current_count, task_id, args, kwargs)
                         )
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     raise QueueFullError(
                         f"{queue_name}: Queue full, timeout after {_queue_timeout} seconds"
                     )
@@ -960,7 +955,7 @@ def priority_limit_async_func_call(
                         return await asyncio.wait_for(future, _timeout)
                     else:
                         return await future
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     # This is user-level timeout (asyncio.wait_for caused)
                     # Mark cancellation request
                     async with task_states_lock:
@@ -1136,8 +1131,7 @@ class SanitizingJSONEncoder(json.JSONEncoder):
         sanitized = self._sanitize_for_encoding(o)
 
         # Call parent's iterencode with sanitized data
-        for chunk in super().iterencode(sanitized, _one_shot):
-            yield chunk
+        yield from super().iterencode(sanitized, _one_shot)
 
     def _sanitize_for_encoding(self, obj):
         """
@@ -1162,7 +1156,7 @@ class SanitizingJSONEncoder(json.JSONEncoder):
                 new_dict[clean_k] = clean_v
             return new_dict
 
-        elif isinstance(obj, (list, tuple)):
+        elif isinstance(obj, list | tuple):
             # Sanitize list/tuple elements
             cleaned = [self._sanitize_for_encoding(item) for item in obj]
             return type(obj)(cleaned) if isinstance(obj, tuple) else cleaned
@@ -1214,11 +1208,11 @@ class TokenizerInterface(Protocol):
     Defines the interface for a tokenizer, requiring encode and decode methods.
     """
 
-    def encode(self, content: str) -> List[int]:
+    def encode(self, content: str) -> list[int]:
         """Encodes a string into a list of tokens."""
         ...
 
-    def decode(self, tokens: List[int]) -> str:
+    def decode(self, tokens: list[int]) -> str:
         """Decodes a list of tokens into a string."""
         ...
 
@@ -1239,7 +1233,7 @@ class Tokenizer:
         self.model_name: str = model_name
         self.tokenizer: TokenizerInterface = tokenizer
 
-    def encode(self, content: str) -> List[int]:
+    def encode(self, content: str) -> list[int]:
         """
         Encodes a string into a list of tokens using the underlying tokenizer.
 
@@ -1251,7 +1245,7 @@ class Tokenizer:
         """
         return self.tokenizer.encode(content)
 
-    def decode(self, tokens: List[int]) -> str:
+    def decode(self, tokens: list[int]) -> str:
         """
         Decodes a list of tokens into a string using the underlying tokenizer.
 
@@ -1852,7 +1846,7 @@ def lazy_external_import(module_name: str, class_name: str) -> Callable[..., Any
 
 async def update_chunk_cache_list(
     chunk_id: str,
-    text_chunks_storage: "BaseKVStorage",
+    text_chunks_storage: BaseKVStorage,
     cache_keys: list[str],
     cache_scenario: str = "batch_update",
 ) -> None:
@@ -1903,7 +1897,7 @@ def remove_think_tags(text: str) -> str:
 async def use_llm_func_with_cache(
     user_prompt: str,
     use_llm_func: callable,
-    llm_response_cache: "BaseKVStorage | None" = None,
+    llm_response_cache: BaseKVStorage | None = None,
     system_prompt: str | None = None,
     max_tokens: int = None,
     history_messages: list[dict[str, str]] = None,
@@ -1944,7 +1938,7 @@ async def use_llm_func_with_cache(
     safe_history_messages = None
     if history_messages:
         safe_history_messages = []
-        for i, msg in enumerate(history_messages):
+        for _i, msg in enumerate(history_messages):
             safe_msg = msg.copy()
             if "content" in safe_msg:
                 safe_msg["content"] = sanitize_text_for_encoding(safe_msg["content"])
@@ -2404,8 +2398,8 @@ def pick_by_weighted_polling(
 
 async def pick_by_vector_similarity(
     query: str,
-    text_chunks_storage: "BaseKVStorage",
-    chunks_vdb: "BaseVectorStorage",
+    text_chunks_storage: BaseKVStorage,
+    chunks_vdb: BaseVectorStorage,
     num_of_chunks: int,
     entity_info: list[dict[str, Any]],
     embedding_func: callable,
@@ -2437,7 +2431,7 @@ async def pick_by_vector_similarity(
 
     # Collect all unique chunk IDs from entity info
     all_chunk_ids = set()
-    for i, entity in enumerate(entity_info):
+    for _i, entity in enumerate(entity_info):
         chunk_ids = entity.get("sorted_chunks", [])
         all_chunk_ids.update(chunk_ids)
 
@@ -2673,7 +2667,7 @@ async def apply_rerank_if_enabled(
 async def process_chunks_unified(
     query: str,
     unique_chunks: list[dict],
-    query_param: "QueryParam",
+    query_param: QueryParam,
     global_config: dict,
     source_type: str = "mixed",
     chunk_token_limit: int = None,  # Add parameter for dynamic token limit
@@ -3225,7 +3219,7 @@ def convert_to_user_format(
 
     # Convert chunks format (chunks already contain complete data)
     formatted_chunks = []
-    for i, chunk in enumerate(chunks):
+    for _i, chunk in enumerate(chunks):
         chunk_data = {
             "reference_id": chunk.get("reference_id", ""),
             "content": chunk.get("content", ""),

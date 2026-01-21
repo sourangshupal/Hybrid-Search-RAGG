@@ -71,7 +71,12 @@ try:
     from langchain_openai import ChatOpenAI, OpenAIEmbeddings
     from ragas import evaluate
     from ragas.llms import LangchainLLMWrapper
-    from ragas.metrics import AnswerRelevancy, ContextPrecision, ContextRecall, Faithfulness
+    from ragas.metrics import (
+        AnswerRelevancy,
+        ContextPrecision,
+        ContextRecall,
+        Faithfulness,
+    )
     from tqdm.auto import tqdm
 
     RAGAS_AVAILABLE = True
@@ -102,7 +107,7 @@ class RAGEvaluator:
 
     def __init__(
         self,
-        rag_instance: "HybridRAG | None" = None,
+        rag_instance: HybridRAG | None = None,
         test_dataset_path: str | Path | None = None,
         query_mode: str = "mix",
     ):
@@ -127,7 +132,7 @@ class RAGEvaluator:
         # Configure evaluation LLM (for RAGAS scoring - needs OpenAI-compatible)
         eval_api_key = os.getenv("EVAL_LLM_BINDING_API_KEY") or os.getenv("OPENAI_API_KEY")
         if not eval_api_key:
-            raise EnvironmentError(
+            raise OSError(
                 "EVAL_LLM_BINDING_API_KEY or OPENAI_API_KEY required for RAGAS evaluation. "
                 "RAGAS uses OpenAI-compatible models for scoring."
             )
@@ -217,7 +222,7 @@ class RAGEvaluator:
 
         logger.info(f"Created sample dataset: {self.test_dataset_path}")
 
-    async def _ensure_rag(self) -> "HybridRAG":
+    async def _ensure_rag(self) -> HybridRAG:
         """Ensure RAG instance is available."""
         if self.rag is None:
             from hybridrag import Settings, create_hybridrag
@@ -465,7 +470,7 @@ class RAGEvaluator:
             "context_precision": 0.0,
             "ragas_score": 0.0,
         }
-        metrics_counts = {k: 0 for k in metrics_sums}
+        metrics_counts = dict.fromkeys(metrics_sums, 0)
 
         for result in valid:
             m = result.get("metrics", {})

@@ -14,8 +14,8 @@ Thank you for your interest in contributing! This guide will help you get starte
 
 ```bash
 # Clone repository
-git clone https://github.com/romiluz13/Hybrid-Search-RAG.git
-cd Hybrid-Search-RAG
+git clone https://github.com/romiluz13/HybridRAG.git
+cd HybridRAG
 
 # Create virtual environment
 python -m venv venv
@@ -63,20 +63,20 @@ async def process_documents(
 ) -> Dict[str, any]:
     """
     Process a list of documents.
-    
+
     Args:
         documents: List of document paths
         settings: Optional HybridRAG settings
-        
+
     Returns:
         Dictionary with processing results
-        
+
     Raises:
         ValueError: If documents list is empty
     """
     if not documents:
         raise ValueError("Documents list cannot be empty")
-    
+
     # Implementation
     ...
 ```
@@ -215,5 +215,3 @@ test: Add tests for query modes
 By contributing, you agree that your contributions will be licensed under the Apache License 2.0.
 
 Thank you for contributing! 🎉
-
-

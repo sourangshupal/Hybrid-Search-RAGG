@@ -10,21 +10,17 @@ Features:
 - Streaming responses
 """
 
+import asyncio
 import os
 import sys
-import tempfile
-import asyncio
-from typing import Optional, List, Dict, Any
 
 import chainlit as cl
-from chainlit import Task, TaskList, TaskStatus
 
 # Add project paths
 _project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 sys.path.insert(0, os.path.join(_project_root, "src"))
 
-from hybridrag import create_hybridrag, Settings
-
+from hybridrag import Settings, create_hybridrag
 
 # ============================================================================
 # Knowledge Base Display Functions
@@ -252,7 +248,7 @@ async def format_kb_management_panel(rag) -> tuple[str, list]:
         # Visual stats cards (markdown style)
         lines.append("### 📊 Statistics")
         lines.append("```")
-        lines.append(f"┌─────────────────────────────────────────────┐")
+        lines.append("┌─────────────────────────────────────────────┐")
         lines.append(f"│  📄 Documents: {docs_total:<7} │  📦 Chunks: {chunks:<9} │")
         lines.append(f"│  🔷 Entities:  {entities:<7} │  🔗 Relations: {relationships:<7} │")
         lines.append("└─────────────────────────────────────────────┘")
@@ -384,7 +380,7 @@ def extract_text_from_file(file_path: str, mime_type: str) -> str:
     if mime_type == "application/pdf" or file_path.endswith(".pdf"):
         return extract_text_from_pdf(file_path)
     elif mime_type in ["text/plain", "text/markdown"] or file_path.endswith((".txt", ".md")):
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(file_path, encoding="utf-8") as f:
             return f.read()
     else:
         raise ValueError(f"Unsupported file type: {mime_type}")
@@ -603,7 +599,7 @@ async def on_ingest_url(action: cl.Action):
 
     if url_msg and url_msg.get("content"):
         url = url_msg["content"].strip()
-        
+
         # Validate URL
         from urllib.parse import urlparse
         try:
@@ -621,7 +617,7 @@ async def on_ingest_url(action: cl.Action):
 
         try:
             result = await rag.ingest_url(url)
-            
+
             if result.success:
                 progress_msg.content = f"""✅ **URL Ingestion Complete**
 
@@ -636,7 +632,7 @@ You can now query this content!"""
 
 **URL:** {url}
 **Errors:** {', '.join(result.errors)}"""
-            
+
             await progress_msg.update()
         except Exception as e:
             progress_msg.content = f"❌ **Error ingesting URL:** {str(e)}"
@@ -698,10 +694,10 @@ async def on_crawl_website(action: cl.Action):
             results = await rag.ingest_website(
                 url, max_pages=max_pages, progress_callback=progress_callback
             )
-            
+
             successful = sum(1 for r in results if r.success)
             total_chunks = sum(r.chunks_created for r in results)
-            
+
             if successful > 0:
                 progress_msg.content = f"""✅ **Website Crawl Complete**
 
@@ -716,7 +712,7 @@ You can now query this content!"""
 **URL:** {url}
 **Pages:** 0/{len(results)} successful
 **Errors:** {', '.join(results[0].errors) if results else 'No pages extracted'}"""
-            
+
             await progress_msg.update()
         except Exception as e:
             progress_msg.content = f"❌ **Error crawling website:** {str(e)}"
@@ -1022,7 +1018,7 @@ async def handle_file_upload_with_progress(elements: list, rag):
         progress_msg.content = "\n".join(summary_lines)
         await progress_msg.update()
     else:
-        progress_msg.content = f"## ❌ Ingestion Failed\n\nNo files were processed successfully.\n\n### Errors\n" + "\n".join(f"- {e}" for e in errors)
+        progress_msg.content = "## ❌ Ingestion Failed\n\nNo files were processed successfully.\n\n### Errors\n" + "\n".join(f"- {e}" for e in errors)
         await progress_msg.update()
 
 

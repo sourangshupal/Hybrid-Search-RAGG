@@ -1,6 +1,6 @@
-from typing import Optional, Tuple, Dict, List
-import numpy as np
+
 import networkx as nx
+import numpy as np
 import pipmaster as pm
 
 # Added automatic libraries install using pipmaster
@@ -13,15 +13,16 @@ if not pm.is_installed("pyglm"):
 if not pm.is_installed("python-louvain"):
     pm.install("python-louvain")
 
-import moderngl
-from imgui_bundle import imgui, immapp, hello_imgui
-import community
-import glm
-import tkinter as tk
-from tkinter import filedialog
-import traceback
 import colorsys
 import os
+import tkinter as tk
+import traceback
+from tkinter import filedialog
+
+import community
+import glm
+import moderngl
+from imgui_bundle import hello_imgui, imgui, immapp
 
 CUSTOM_FONT = "font.ttf"
 
@@ -47,9 +48,9 @@ class GraphViewer:
 
     def __init__(self):
         self.glctx = None  # ModernGL context
-        self.graph: Optional[nx.Graph] = None
-        self.nodes: List[Node3D] = []
-        self.id_node_map: Dict[str, Node3D] = {}
+        self.graph: nx.Graph | None = None
+        self.nodes: list[Node3D] = []
+        self.id_node_map: dict[str, Node3D] = {}
         self.communities = None
         self.community_colors = None
 
@@ -88,8 +89,8 @@ class GraphViewer:
         self.error_message = ""
 
         # Selection state
-        self.selected_node: Optional[Node3D] = None
-        self.highlighted_node: Optional[Node3D] = None
+        self.selected_node: Node3D | None = None
+        self.highlighted_node: Node3D | None = None
 
         # Node id map
         self.node_id_fbo = None
@@ -700,7 +701,7 @@ class GraphViewer:
             1000.0,  # Far plane
         )
 
-    def find_node_at(self, screen_pos: Tuple[int, int]) -> Optional[Node3D]:
+    def find_node_at(self, screen_pos: tuple[int, int]) -> Node3D | None:
         """Find the node at a specific screen position"""
         if (
             self.node_id_texture_np is None
@@ -729,7 +730,7 @@ class GraphViewer:
             return None
         return self.nodes[index]
 
-    def is_node_visible_at(self, screen_pos: Tuple[int, int], node_idx: int) -> bool:
+    def is_node_visible_at(self, screen_pos: tuple[int, int], node_idx: int) -> bool:
         """Check if a node exists at a specific screen position"""
         node = self.find_node_at(screen_pos)
         return node is not None and node.idx == node_idx
@@ -956,7 +957,7 @@ class GraphViewer:
         self.pitch = 0.0
 
 
-def generate_colors(n: int) -> List[glm.vec3]:
+def generate_colors(n: int) -> list[glm.vec3]:
     """Generate n distinct colors using HSV color space"""
     colors = []
     for i in range(n):
@@ -972,7 +973,7 @@ def generate_colors(n: int) -> List[glm.vec3]:
     return colors
 
 
-def show_file_dialog() -> Optional[str]:
+def show_file_dialog() -> str | None:
     """Show a file dialog for selecting GraphML files"""
     file_path = filedialog.askopenfilename(
         title="Select GraphML File",
@@ -981,7 +982,7 @@ def show_file_dialog() -> Optional[str]:
     return file_path if file_path else None
 
 
-def create_sphere(sectors: int = 32, rings: int = 16) -> Tuple:
+def create_sphere(sectors: int = 32, rings: int = 16) -> tuple:
     """
     Creates a sphere.
     """

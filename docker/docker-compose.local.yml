@@ -1,0 +1,45 @@
+# Docker Compose for Local MongoDB Atlas Development
+# Usage: docker-compose -f docker/docker-compose.local.yml up
+
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongodb/mongodb-atlas-local:8.0
+    container_name: hybridrag-mongodb-local
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGODB_INITDB_ROOT_USERNAME=admin
+      - MONGODB_INITDB_ROOT_PASSWORD=password
+    volumes:
+      - mongodb-data:/data/db
+      - mongodb-config:/data/configdb
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    networks:
+      - hybridrag-network
+
+volumes:
+  mongodb-data:
+    driver: local
+  mongodb-config:
+    driver: local
+
+networks:
+  hybridrag-network:
+    driver: bridge
+
+# Connection URI for .env:
+# MONGODB_URI=mongodb://admin:password@localhost:27017/?authSource=admin
+
+# Quick Commands:
+# Start:    docker-compose -f docker/docker-compose.local.yml up -d
+# Stop:     docker-compose -f docker/docker-compose.local.yml down
+# Logs:     docker-compose -f docker/docker-compose.local.yml logs -f
+# Destroy:  docker-compose -f docker/docker-compose.local.yml down -v

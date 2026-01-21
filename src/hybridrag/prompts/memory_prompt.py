@@ -27,7 +27,6 @@ from __future__ import annotations
 
 from typing import Final
 
-
 MEMORY_SUMMARIZATION_PROMPT: Final[str] = """You are a conversation summarizer. Create a progressive summary of the conversation.
 
 ## Task

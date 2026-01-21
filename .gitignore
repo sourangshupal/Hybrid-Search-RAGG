@@ -66,17 +66,25 @@ test_real_life.py
 test_queries_simple.py
 test_unknown_content.py
 REAL_LIFE_TEST_GUIDE.md
-production_readiness_report.json
-QUERY_RESULTS_ANALYSIS.md
 
 # Internal development (keep locally, exclude from repo)
 .claude/
+.cursor/
+.chainlit/
+.replit
+.files/
 build-process/
 planning/
 research/
 CLAUDE.md
 website/
 deprecated/
+landing/
+docs/plans/
+docs/research/
+dist/
+src/*.egg-info/
+src/mongodb_hybridrag.egg-info/
 
 # OS files
 .DS_Store
@@ -87,11 +95,6 @@ Thumbs.db
 
 # mypy
 .mypy_cache/
-
-# Separate projects and comparisons
-mongodb-rag-agent-comparison/
-*audit*/
-audit/
 
 # Local scripts with internal test data
 scripts/
@@ -107,3 +110,15 @@ src/hybridrag.egg-info/
 src/mongodb_hybridrag.egg-info/
 
 _internal/
+# Internal Testing Scraps (Root level)
+test_instructions_reranking.py
+test_queries_simple.py
+test_quick_real.py
+test_real_apis.py
+test_real_life.py
+test_tavily_integration.py
+test_unknown_content.py
+production_readiness_test.log
+production_readiness_report.json
+QUERY_RESULTS_ANALYSIS.md
+simulation_debug.log

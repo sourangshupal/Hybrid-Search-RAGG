@@ -1,39 +1,34 @@
-import sys
-import re
 import json
+import re
+
 from ..utils import verbose_debug
 
-if sys.version_info < (3, 9):
-    pass
-else:
-    pass
+pass
 import pipmaster as pm  # Pipmaster for dynamic library install
 
 # install specific modules
 if not pm.is_installed("zhipuai"):
     pm.install("zhipuai")
 
+
+import numpy as np
 from openai import (
     APIConnectionError,
-    RateLimitError,
     APITimeoutError,
+    RateLimitError,
 )
 from tenacity import (
     retry,
+    retry_if_exception_type,
     stop_after_attempt,
     wait_exponential,
-    retry_if_exception_type,
 )
 
 from ..utils import (
-    wrap_embedding_func_with_attrs,
     logger,
+    wrap_embedding_func_with_attrs,
 )
-
 from .types import GPTKeywordExtractionFormat
-
-import numpy as np
-from typing import Union, List, Optional, Dict
 
 
 @retry(
@@ -44,14 +39,16 @@ from typing import Union, List, Optional, Dict
     ),
 )
 async def zhipu_complete_if_cache(
-    prompt: Union[str, List[Dict[str, str]]],
+    prompt: str | list[dict[str, str]],
     model: str = "glm-4-flashx",  # The most cost/performance balance model in glm-4 series
-    api_key: Optional[str] = None,
-    system_prompt: Optional[str] = None,
-    history_messages: List[Dict[str, str]] = [],
+    api_key: str | None = None,
+    system_prompt: str | None = None,
+    history_messages: list[dict[str, str]] = None,
     enable_cot: bool = False,
     **kwargs,
 ) -> str:
+    if history_messages is None:
+        history_messages = []
     if enable_cot:
         logger.debug(
             "enable_cot=True is not supported for ZhipuAI and will be ignored."
@@ -98,12 +95,14 @@ async def zhipu_complete_if_cache(
 async def zhipu_complete(
     prompt,
     system_prompt=None,
-    history_messages=[],
+    history_messages=None,
     keyword_extraction=False,
     enable_cot: bool = False,
     **kwargs,
 ):
     # Pop keyword_extraction from kwargs to avoid passing it to zhipu_complete_if_cache
+    if history_messages is None:
+        history_messages = []
     keyword_extraction = kwargs.pop("keyword_extraction", None)
 
     if keyword_extraction:

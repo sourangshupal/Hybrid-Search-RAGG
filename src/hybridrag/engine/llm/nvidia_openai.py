@@ -1,10 +1,6 @@
-import sys
 import os
 
-if sys.version_info < (3, 9):
-    pass
-else:
-    pass
+pass
 
 import pipmaster as pm  # Pipmaster for dynamic library install
 
@@ -12,25 +8,23 @@ import pipmaster as pm  # Pipmaster for dynamic library install
 if not pm.is_installed("openai"):
     pm.install("openai")
 
+import numpy as np
 from openai import (
-    AsyncOpenAI,
     APIConnectionError,
-    RateLimitError,
     APITimeoutError,
+    AsyncOpenAI,
+    RateLimitError,
 )
 from tenacity import (
     retry,
+    retry_if_exception_type,
     stop_after_attempt,
     wait_exponential,
-    retry_if_exception_type,
 )
 
 from ..utils import (
     wrap_embedding_func_with_attrs,
 )
-
-
-import numpy as np
 
 
 @wrap_embedding_func_with_attrs(embedding_dim=2048, max_token_size=8192)

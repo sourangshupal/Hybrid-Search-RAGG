@@ -14,14 +14,14 @@ from __future__ import annotations
 
 import logging
 import os
-import sys
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Callable, Literal, Sequence
+from typing import TYPE_CHECKING, Any, Literal
 
 # Internal RAG engine imports (bundled in hybridrag.engine)
 from ..engine import BaseRAGEngine as _RAGEngine
-from ..engine import QueryParam as _QueryParam
 from ..engine import EmbeddingFunc
+from ..engine import QueryParam as _QueryParam
 
 
 # Re-export QueryParam with our own name
@@ -46,25 +46,22 @@ class QueryParam:
 
 from ..config.settings import Settings, get_settings
 from ..enhancements.entity_boosting import create_boosted_rerank_func
-from ..enhancements.implicit_expansion import ImplicitExpander
 from ..ingestion import (
+    ChunkingConfig,
     DocumentIngestionPipeline,
     IngestionConfig,
     IngestionResult,
-    ChunkingConfig,
 )
 from ..integrations import (
-    log_rag_query,
-    log_ingestion,
-    get_langfuse,
-    flush_langfuse,
     langfuse_enabled,
+    log_ingestion,
+    log_rag_query,
 )
 from ..memory import ConversationMemory
 
 if TYPE_CHECKING:
-    from pathlib import Path
     from collections.abc import Callable, Sequence
+    from pathlib import Path
 
     import numpy as np
 
@@ -198,11 +195,11 @@ class HybridRAG:
         # Create rerank function (Voyage AI - best quality)
         rerank_func = None
         if self.settings.voyage_api_key:
-            from ..integrations.voyage import create_rerank_func
             from ..integrations.rerank_instructions import get_rerank_instructions
+            from ..integrations.voyage import create_rerank_func
 
             logger.info(f"[INIT] Creating Voyage reranker: model={self.settings.voyage_rerank_model}")
-            
+
             # Generate default instructions based on settings
             default_instructions = None
             if self.settings.voyage_rerank_instructions:
@@ -217,7 +214,7 @@ class HybridRAG:
                 )
                 if default_instructions:
                     logger.info(f"[INIT] Using smart rerank instructions for mode '{self.settings.default_query_mode}': '{default_instructions[:50]}...'")
-            
+
             base_rerank = create_rerank_func(
                 api_key=self.settings.voyage_api_key.get_secret_value(),
                 model=self.settings.voyage_rerank_model,
@@ -370,7 +367,7 @@ class HybridRAG:
 
         doc_count = len(documents)
         total_chars = sum(len(d) for d in documents)
-        logger.info(f"[INSERT] ========== Starting Document Insertion ==========")
+        logger.info("[INSERT] ========== Starting Document Insertion ==========")
         logger.info(f"[INSERT] Documents: {doc_count}, Total chars: {total_chars:,}")
         if file_paths:
             logger.info(f"[INSERT] File paths: {file_paths}")
@@ -385,7 +382,7 @@ class HybridRAG:
                 file_paths=list(file_paths) if file_paths else None,
             )
             duration = _time.time() - start_time
-            logger.info(f"[INSERT] ========== Document Insertion Complete ==========")
+            logger.info("[INSERT] ========== Document Insertion Complete ==========")
 
             # Log to Langfuse if enabled
             if langfuse_enabled():
@@ -407,7 +404,7 @@ class HybridRAG:
 
     async def ingest_files(
         self,
-        folder_path: str | "Path",
+        folder_path: str | Path,
         config: IngestionConfig | None = None,
         progress_callback: Callable[[int, int], None] | None = None,
     ) -> list[IngestionResult]:
@@ -446,7 +443,7 @@ class HybridRAG:
         """
         self._ensure_initialized()
 
-        logger.info(f"[INGEST_FILES] ========== Starting File Ingestion ==========")
+        logger.info("[INGEST_FILES] ========== Starting File Ingestion ==========")
         logger.info(f"[INGEST_FILES] Folder: {folder_path}")
 
         # Get MongoDB database for the pipeline
@@ -508,7 +505,7 @@ class HybridRAG:
             total_chunks = sum(r.chunks_created for r in results)
             total_errors = sum(len(r.errors) for r in results)
 
-            logger.info(f"[INGEST_FILES] ========== File Ingestion Complete ==========")
+            logger.info("[INGEST_FILES] ========== File Ingestion Complete ==========")
             logger.info(f"[INGEST_FILES] Documents: {successful}/{total_docs} successful")
             logger.info(f"[INGEST_FILES] Total chunks: {total_chunks}")
             logger.info(f"[INGEST_FILES] Duration: {duration:.2f}s")
@@ -559,7 +556,7 @@ class HybridRAG:
 
     async def ingest_file(
         self,
-        file_path: str | "Path",
+        file_path: str | Path,
         config: IngestionConfig | None = None,
     ) -> IngestionResult:
         """
@@ -599,8 +596,8 @@ class HybridRAG:
             )
 
         # Create a temp folder with just this file (symlink or copy)
-        import tempfile
         import shutil
+        import tempfile
 
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_file = PathLib(temp_dir) / file_path.name
@@ -653,7 +650,7 @@ class HybridRAG:
         """
         self._ensure_initialized()
 
-        logger.info(f"[INGEST_URL] ========== Starting URL Ingestion ==========")
+        logger.info("[INGEST_URL] ========== Starting URL Ingestion ==========")
         logger.info(f"[INGEST_URL] URL: {url}")
 
         # Check if Tavily API key is configured
@@ -675,14 +672,16 @@ class HybridRAG:
 
         try:
             # Import Tavily processor
-            from ..ingestion.tavily_processor import TavilyProcessor
             from ..ingestion.tavily_processor import (
                 BadRequestError,
                 ForbiddenError,
                 InvalidAPIKeyError,
                 MissingAPIKeyError,
-                TimeoutError as TavilyTimeoutError,
+                TavilyProcessor,
                 UsageLimitExceededError,
+            )
+            from ..ingestion.tavily_processor import (
+                TimeoutError as TavilyTimeoutError,
             )
 
             # Create Tavily processor
@@ -783,7 +782,7 @@ class HybridRAG:
                     },
                 )
 
-            logger.info(f"[INGEST_URL] ========== URL Ingestion Complete ==========")
+            logger.info("[INGEST_URL] ========== URL Ingestion Complete ==========")
             logger.info(
                 f"[INGEST_URL] Success: {result.success}, Chunks: {result.chunks_created}, Duration: {duration:.2f}s"
             )
@@ -918,7 +917,7 @@ class HybridRAG:
         self._ensure_initialized()
 
         logger.info(
-            f"[INGEST_WEBSITE] ========== Starting Website Crawl =========="
+            "[INGEST_WEBSITE] ========== Starting Website Crawl =========="
         )
         logger.info(
             f"[INGEST_WEBSITE] URL: {url}, max_pages={max_pages}, max_depth={max_depth}"
@@ -945,14 +944,16 @@ class HybridRAG:
 
         try:
             # Import Tavily processor
-            from ..ingestion.tavily_processor import TavilyProcessor
             from ..ingestion.tavily_processor import (
                 BadRequestError,
                 ForbiddenError,
                 InvalidAPIKeyError,
                 MissingAPIKeyError,
-                TimeoutError as TavilyTimeoutError,
+                TavilyProcessor,
                 UsageLimitExceededError,
+            )
+            from ..ingestion.tavily_processor import (
+                TimeoutError as TavilyTimeoutError,
             )
 
             # Create Tavily processor
@@ -1077,7 +1078,7 @@ class HybridRAG:
             total_errors = sum(len(r.errors) for r in results)
 
             logger.info(
-                f"[INGEST_WEBSITE] ========== Website Crawl Complete =========="
+                "[INGEST_WEBSITE] ========== Website Crawl Complete =========="
             )
             logger.info(
                 f"[INGEST_WEBSITE] Pages: {successful}/{total_docs} successful"
@@ -1240,7 +1241,7 @@ class HybridRAG:
         resolved_rerank_top_k = rerank_top_k or self.settings.default_rerank_top_k
         resolved_enable_rerank = enable_rerank if enable_rerank is not None else self.settings.enable_rerank
 
-        logger.info(f"[QUERY] ========== Starting Query ==========")
+        logger.info("[QUERY] ========== Starting Query ==========")
         logger.info(f"[QUERY] Query: '{query[:100]}{'...' if len(query) > 100 else ''}'")
         logger.info(f"[QUERY] Mode: {resolved_mode}, top_k: {resolved_top_k}, rerank_top_k: {resolved_rerank_top_k}")
         logger.info(f"[QUERY] Rerank enabled: {resolved_enable_rerank}, only_context: {only_context}")
@@ -1250,7 +1251,7 @@ class HybridRAG:
         if self.settings.enable_implicit_expansion and hasattr(rag, 'entities_vdb'):
             expanded_query = await self._expand_query_with_entities(query, rag)
             if expanded_query != query:
-                logger.info(f"[QUERY] Implicit expansion applied, query expanded")
+                logger.info("[QUERY] Implicit expansion applied, query expanded")
 
         # Build query parameters with defaults from settings
         param = QueryParam(
@@ -1276,7 +1277,7 @@ class HybridRAG:
 
             response_len = len(response)
             logger.info(f"[QUERY] Response received: {response_len} chars")
-            logger.info(f"[QUERY] ========== Query Complete ==========")
+            logger.info("[QUERY] ========== Query Complete ==========")
             return response
         except Exception as e:
             logger.error(f"[QUERY] Error during query: {e}")

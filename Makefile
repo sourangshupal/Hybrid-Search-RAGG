@@ -7,7 +7,7 @@
 #   make test      - Run tests
 #   make help      - Show all commands
 #
-# Reference: https://github.com/romiluz13/Hybrid-Search-RAG
+# Reference: https://github.com/romiluz13/HybridRAG
 
 .PHONY: help setup install dev test lint format clean build docker run-api run-ui
 

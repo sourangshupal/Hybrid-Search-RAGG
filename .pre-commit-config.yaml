@@ -1,0 +1,41 @@
+# Pre-commit configuration for HybridRAG
+# Auto-formatting and code quality checks
+# Install: pre-commit install
+# Run: pre-commit run --all-files
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: check-yaml
+        name: Check YAML syntax
+      - id: check-json
+        name: Check JSON syntax
+      - id: end-of-file-fixer
+        name: Fix end of files
+      - id: trailing-whitespace
+        name: Trim trailing whitespace
+      - id: check-case-conflict
+        name: Check for case conflicts
+      - id: check-merge-conflict
+        name: Check for merge conflicts
+      - id: check-added-large-files
+        name: Check for large files
+        args: ['--maxkb=1000']
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.11.6
+    hooks:
+      - id: ruff
+        name: Ruff linter
+        args: [--fix]
+      - id: ruff-format
+        name: Ruff formatter
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.8.0
+    hooks:
+      - id: mypy
+        name: MyPy type checker
+        additional_dependencies: [pydantic>=2.0.0, motor>=3.0.0]
+        args: [--ignore-missing-imports, --check-untyped-defs]

@@ -11,15 +11,17 @@
 
 # The Atomic RAG Boilerplate
 
+### **MongoDB 8.2 Native • $rankFusion • Lexical Prefilters • Knowledge Graph**
+
 **Stop syncing 4 databases. Store vectors, graphs, and docs in one ACID-compliant MongoDB document.**
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-green.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![MongoDB](https://img.shields.io/badge/MongoDB-Atlas-47A248.svg)](https://www.mongodb.com/atlas)
+[![MongoDB](https://img.shields.io/badge/MongoDB-8.2+-47A248.svg)](https://www.mongodb.com/atlas)
 [![Voyage AI](https://img.shields.io/badge/Voyage_AI-Embeddings-purple.svg)](https://www.voyageai.com/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](http://makeapullrequest.com)
 
-[Features](#-features) • [Quick Start](#-quick-start) • [How It Works](#-how-hybrid-search-works) • [Documentation](#-documentation) • [Contributing](#-contributing)
+[Features](#-features) • [MongoDB 8.2](#-mongodb-82-features) • [Quick Start](#-quick-start) • [Documentation](#-documentation) • [Contributing](#-contributing)
 
 </div>
 
@@ -65,95 +67,185 @@
 
 ## ✨ Features
 
+<table>
+<tr>
+<td width="50%">
+
+### 🔄 Core Capabilities
+| Feature | Description |
+|---------|-------------|
+| **Atomic Updates** | Vector + metadata + graph in one transaction |
+| **$rankFusion** | Native MongoDB 8.2 weighted hybrid search |
+| **$scoreFusion** | Score-based fusion with normalization |
+| **Knowledge Graph** | Automatic entity & relationship extraction |
+| **Self-Compacting Memory** | Conversations auto-summarize |
+
+</td>
+<td width="50%">
+
+### 🚀 MongoDB 8.2 Native
+| Feature | Description |
+|---------|-------------|
+| **Lexical Prefilters** | Fuzzy, phrase, wildcard BEFORE vectors |
+| **Dynamic numCandidates** | Auto-tuned (top_k × 20) |
+| **scoreDetails** | Per-pipeline score debugging |
+| **Explicit Weights** | Configurable vector/text weights |
+| **Graceful Fallback** | Auto-degrades for older MongoDB |
+
+</td>
+</tr>
+</table>
+
+### 🔌 Integrations
+
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                                                                          │
-│  🔄 ATOMIC UPDATES         Vector + metadata + graph in one transaction │
-│  🔍 HYBRID SEARCH          Vector + Keyword via RRF, Graph via modes    │
-│  🧠 KNOWLEDGE GRAPH        Automatic entity & relationship extraction   │
-│  💬 SELF-COMPACTING MEMORY Conversations auto-summarize, never lost     │
-│  🚀 ENTITY BOOSTING        Knowledge graph enhances vector reranking    │
-│  📊 RAGAS EVALUATION       Built-in RAG quality metrics                 │
-│  🔌 MULTI-LLM              Gemini, Claude, OpenAI - switch anytime      │
-│  📈 LANGFUSE TRACING       Production observability built-in            │
-│  🎨 CHAINLIT UI            Beautiful web chat interface                 │
-│  ⚡ VOYAGE AI              State-of-the-art embeddings + reranking      │
-│  🌐 TAVILY INTEGRATION     Web content extraction & crawling            │
-│                                                                          │
+│  EMBEDDINGS       │  LLM PROVIDERS    │  OBSERVABILITY   │  UI           │
+│  ────────────     │  ─────────────    │  ────────────    │  ──           │
+│  ✓ Voyage AI      │  ✓ Claude         │  ✓ Langfuse      │  ✓ Chainlit   │
+│  ✓ voyage-3-large │  ✓ GPT-4          │  ✓ RAGAS Eval    │  ✓ Rich CLI   │
+│  ✓ Reranking      │  ✓ Gemini         │                  │  ✓ REST API   │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 🆕 MongoDB 8.2 Features
+
+HybridRAG is built for **MongoDB 8.2** with native support for the latest search operators.
+
+### Three Filter Systems
+
+```python
+from hybridrag import (
+    # 1. Vector Search Filters (MQL - for $vectorSearch)
+    VectorSearchFilterConfig,
+    build_vector_search_filters,
+
+    # 2. Atlas Search Filters (for $search compound queries)
+    AtlasSearchFilterConfig,
+    build_atlas_search_filters,
+
+    # 3. Lexical Prefilters (NEW - for $search.vectorSearch)
+    LexicalPrefilterConfig,
+    build_lexical_prefilters,
+    TextFilter, FuzzyFilter, PhraseFilter, WildcardFilter, GeoFilter,
+)
+```
+
+### Lexical Prefilters (MongoDB 8.2+)
+
+**The game-changer**: Apply Atlas Search operators (fuzzy, phrase, wildcard, geo) **BEFORE** vector search.
+
+```python
+from hybridrag import LexicalPrefilterConfig, HybridRAG
+
+# Create a lexical prefilter config
+filter_config = LexicalPrefilterConfig(
+    # Fuzzy text matching (typo-tolerant)
+    fuzzy_filters=[{"path": "content", "query": "machin lerning", "maxEdits": 2}],
+
+    # Exact phrase matching
+    phrase_filters=[{"path": "title", "query": "vector database"}],
+
+    # Wildcard patterns
+    wildcard_filters=[{"path": "tags", "query": "tech*"}],
+
+    # Date range filtering
+    range_filters={"timestamp": {"gte": "2024-01-01"}},
+
+    # Geospatial (find docs near a location)
+    geo_filters=[{"path": "location", "geometry": {"type": "Point", "coordinates": [-73.9, 40.7]}}],
+)
+
+# Use with hybrid search
+results = await rag.query(
+    query="machine learning best practices",
+    mode="hybrid",
+    lexical_filter_config=filter_config,
+)
+```
+
+### Why Lexical Prefilters Matter
+
+| Scenario | Legacy $vectorSearch | New $search.vectorSearch |
+|----------|---------------------|--------------------------|
+| "Find docs about *machin lerning*" | ❌ No fuzzy support | ✅ `fuzzy: {maxEdits: 2}` |
+| "Exact phrase 'machine learning'" | ❌ Vector similarity only | ✅ `phrase: {slop: 0}` |
+| "Tags matching tech*" | ❌ No wildcards | ✅ `wildcard: {query: "tech*"}` |
+| "Docs within 10km of NYC" | ❌ No geo filtering | ✅ `geoWithin` |
+| "Combined filters" | ❌ MQL only ($eq, $gte) | ✅ Full Atlas Search syntax |
+
+### $meta Score Fields Reference
+
+```python
+# CRITICAL: Each operator uses a DIFFERENT $meta field!
+OPERATOR_SCORE_FIELDS = {
+    "$vectorSearch":        "vectorSearchScore",   # Legacy
+    "$search.vectorSearch": "searchScore",         # MongoDB 8.2+
+    "$rankFusion":          "rankFusionScore",
+    "$scoreFusion":         "scoreFusionScore",
+}
 ```
 
 ---
 
 ## 🔀 How Hybrid Search Works
 
-HybridRAG combines multiple retrieval methods:
-
 ```
-  ┌─────────────────────────────────────────────────────┐
-  │                  RRF FUSION ($rankFusion)           │
-  │                                                     │
-  │   ┌─────────────┐              ┌─────────────┐      │
-  │   │   VECTOR    │              │   KEYWORD   │      │
-  │   │   SEARCH    │              │   SEARCH    │      │
-  │   │  Semantic   │              │   Text      │      │
-  │   │  Similarity │              │  Matching   │      │
-  │   └──────┬──────┘              └──────┬──────┘      │
-  │          │                            │             │
-  │          └────────────┬───────────────┘             │
-  │                       │                             │
-  │              ┌────────▼────────┐                    │
-  │              │  RRF(d) = Σ 1   │                    │
-  │              │         ─────   │                    │
-  │              │         k + r   │                    │
-  │              └─────────────────┘                    │
-  └─────────────────────────────────────────────────────┘
+  ┌─────────────────────────────────────────────────────────────────────┐
+  │                    $rankFusion (MongoDB 8.2 Native)                  │
+  │                                                                      │
+  │   ┌───────────────────────┐          ┌───────────────────────┐      │
+  │   │    VECTOR PIPELINE    │          │    TEXT PIPELINE      │      │
+  │   │  $search.vectorSearch │          │  $search.compound     │      │
+  │   │                       │          │                       │      │
+  │   │  ┌─────────────────┐  │          │  ┌─────────────────┐  │      │
+  │   │  │ Lexical Prefilter│  │          │  │  Fuzzy Matching │  │      │
+  │   │  │ (fuzzy/phrase/  │  │          │  │                 │  │      │
+  │   │  │  wildcard/geo)  │  │          │  │                 │  │      │
+  │   │  └────────┬────────┘  │          │  └────────┬────────┘  │      │
+  │   │           ↓           │          │           ↓           │      │
+  │   │  ┌─────────────────┐  │          │  ┌─────────────────┐  │      │
+  │   │  │ Vector Similarity│  │          │  │  BM25 Scoring   │  │      │
+  │   │  └────────┬────────┘  │          │  └────────┬────────┘  │      │
+  │   └───────────┼───────────┘          └───────────┼───────────┘      │
+  │               │                                  │                  │
+  │               └──────────────┬───────────────────┘                  │
+  │                              ↓                                      │
+  │                  ┌───────────────────────┐                          │
+  │                  │  Weighted Fusion      │                          │
+  │                  │  vector: 0.6          │                          │
+  │                  │  text:   0.4          │                          │
+  │                  │  scoreDetails: true   │                          │
+  │                  └───────────────────────┘                          │
+  └─────────────────────────────────────────────────────────────────────┘
 
-  ┌─────────────────────────────────────────────────────┐
-  │              GRAPH SEARCH ($graphLookup)            │
-  │                                                     │
-  │   ┌─────────────┐    Used in mix/local modes        │
-  │   │  KNOWLEDGE  │    for entity traversal.          │
-  │   │    GRAPH    │    Enhances results via           │
-  │   │  Entities & │    Entity Boosting.               │
-  │   │  Relations  │                                   │
-  │   └─────────────┘                                   │
-  └─────────────────────────────────────────────────────┘
+  ┌─────────────────────────────────────────────────────────────────────┐
+  │              KNOWLEDGE GRAPH ($graphLookup)                          │
+  │                                                                      │
+  │   Entity Boosting: KG relationships enhance reranking scores         │
+  │   Mix Mode: Combines vector + text + graph for comprehensive RAG     │
+  └─────────────────────────────────────────────────────────────────────┘
 ```
-
-**RRF** combines Vector + Keyword results. **Graph** search via `$graphLookup` traverses entity relationships separately in `mix` and `local` query modes.
 
 ---
 
 ## 🚀 Quick Start
 
-### System Requirements
-
-**Hardware:**
-- **CPU**: 2+ cores (x86_64 or ARM64)
-- **RAM**: 4 GB minimum, 8 GB recommended
-- **Storage**: 5 GB free space minimum
-- **Network**: Stable internet connection
-
-**Software:**
-- **Python**: 3.11 or higher (3.12 recommended)
-- **MongoDB**: MongoDB Community Edition (recommended for free tier) or MongoDB Atlas M10+ (for production)
-  - **Note**: Atlas M0 free tier has a 3-index limit that prevents full hybrid search - use Community Edition for unlimited indexes
-- **API Keys**: Voyage AI (required) + at least one LLM provider (Anthropic/OpenAI/Gemini)
-- **Optional**: Tavily API key for web content ingestion
-
-**Note**: No GPU required! All embeddings and LLM inference are handled via API calls.
-
 ### Installation
 
 ```bash
-# Full installation with all features
-git clone https://github.com/romiluz13/Hybrid-Search-RAG.git
-cd Hybrid-Search-RAG
+# Clone and install
+git clone https://github.com/romiluz13/HybridRAG.git
+cd HybridRAG
+
+# First-time setup (recommended)
+make first-time-setup
+
+# Or manual installation
 pip install -e ".[all]"
 ```
-
-For detailed installation instructions, see the [Installation Guide](docs/installation.md).
 
 ### Configuration
 
@@ -164,81 +256,68 @@ MONGODB_URI=mongodb+srv://user:pass@cluster.mongodb.net
 MONGODB_DATABASE=hybridrag
 VOYAGE_API_KEY=pa-xxxxxxxxxxxxx
 ANTHROPIC_API_KEY=sk-ant-xxxxxxxxxxxxx
-TAVILY_API_KEY=tvly-xxxxxxxxxxxxx  # Optional: for web ingestion
 EOF
 ```
 
-### Launch Web UI
-
-```bash
-chainlit run src/hybridrag/ui/chat.py
-```
-
-Then open `http://localhost:8000` - drag & drop files to ingest, ask questions!
-
----
-
-## 📖 Usage
-
-### Python SDK
+### Basic Usage
 
 ```python
 import asyncio
-from hybridrag import create_hybridrag
+from hybridrag import create_hybridrag, LexicalPrefilterConfig
 
 async def main():
-    # Initialize (auto-initializes by default)
+    # Initialize
     rag = await create_hybridrag()
 
-    # Ingest documents from folder (uses Docling processor)
-    results = await rag.ingest_files("path/to/documents/")
-    
-    # Or ingest web content via Tavily
-    result = await rag.ingest_url("https://docs.mongodb.com/atlas/")
-    results = await rag.ingest_website("https://example.com", max_pages=10)
-    
-    # Or insert raw text directly
-    await rag.insert(["Document 1 content...", "Document 2 content..."])
+    # Ingest documents
+    await rag.ingest_files("./documents/")
 
-    # Query with conversation memory
-    session_id = await rag.create_conversation_session()
-
+    # Simple query
     result = await rag.query_with_memory(
         query="What are the key findings?",
-        session_id=session_id,
         mode="mix",  # Vector + Graph + Keyword
     )
-
     print(result["answer"])
+
+    # Advanced: Query with lexical prefilters
+    filter_config = LexicalPrefilterConfig(
+        fuzzy_filters=[{"path": "content", "query": "machin lerning", "maxEdits": 2}],
+        range_filters={"timestamp": {"gte": "2024-01-01"}},
+    )
+
+    result = await rag.query(
+        query="machine learning trends",
+        mode="hybrid",
+        lexical_filter_config=filter_config,
+    )
 
 asyncio.run(main())
 ```
 
-### Query Modes
-
-| Mode | Description | Best For |
-|------|-------------|----------|
-| `mix` | KG + Vector + Keyword (recommended) | General queries |
-| `local` | Entity-focused retrieval | Specific entities |
-| `global` | Community summaries | High-level overview |
-| `hybrid` | Local + Global combined | Comprehensive answers |
-| `naive` | Vector search only | Simple similarity |
-| `bypass` | Skip retrieval, direct LLM | Testing/debugging |
-
-### CLI Interface
+### CLI
 
 ```bash
-hybridrag  # Launch interactive CLI
+# Launch interactive CLI
+hybridrag chat
 
-# Commands:
-# > ingest path/to/file.pdf
-# > ingest-url https://docs.mongodb.com/atlas/
-# > ingest-website https://example.com 10
-# > What is this document about?
-# > /mode mix
-# > /status
-# > exit
+# Or use Typer commands
+hybridrag ingest ./documents/
+hybridrag query "What is MongoDB Atlas?"
+hybridrag status
+hybridrag benchmark
 ```
+
+---
+
+## 📊 Query Modes
+
+| Mode | Description | Use Case |
+|------|-------------|----------|
+| `mix` | KG + Vector + Keyword | **Recommended** - General queries |
+| `hybrid` | Vector + Keyword ($rankFusion) | Fast hybrid search |
+| `local` | Entity-focused retrieval | Specific entities |
+| `global` | Community summaries | High-level overview |
+| `naive` | Vector search only | Simple similarity |
 
 ---
 
@@ -250,108 +329,89 @@ hybridrag  # Launch interactive CLI
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                          │
 │  ┌────────────────┐  ┌────────────────┐  ┌────────────────────────────┐ │
-│  │   Voyage AI    │  │  Claude/GPT/   │  │      MongoDB Atlas         │ │
+│  │   Voyage AI    │  │  Claude/GPT/   │  │      MongoDB Atlas 8.2     │ │
 │  │   Embeddings   │  │    Gemini      │  │                            │ │
-│  │   + Reranking  │  │                │  │  ┌──────┐ ┌──────┐ ┌────┐  │ │
-│  └────────────────┘  └────────────────┘  │  │Vector│ │Graph │ │ KV │  │ │
-│                                          │  └──────┘ └──────┘ └────┘  │ │
+│  │   + Reranking  │  │                │  │  ┌──────────────────────┐  │ │
+│  └────────────────┘  └────────────────┘  │  │ $rankFusion          │  │ │
+│                                          │  │ $scoreFusion         │  │ │
+│                                          │  │ $search.vectorSearch │  │ │
+│                                          │  │ $graphLookup         │  │ │
+│                                          │  └──────────────────────┘  │ │
 │                                          └────────────────────────────┘ │
 ├─────────────────────────────────────────────────────────────────────────┤
 │  ┌─────────────────────────────────────────────────────────────────────┐│
+│  │                         FILTER SYSTEMS                              ││
+│  │  VectorSearchFilterConfig │ AtlasSearchFilterConfig │ LexicalPrefilter││
+│  │  (MQL: $eq, $gte, $in)    │ (Atlas: range, equals)  │ (fuzzy,phrase) ││
+│  └─────────────────────────────────────────────────────────────────────┘│
+├─────────────────────────────────────────────────────────────────────────┤
+│  ┌─────────────────────────────────────────────────────────────────────┐│
 │  │                         ENHANCEMENTS                                 ││
-│  │  Entity Boosting │ Implicit Expansion │ Self-Compacting Memory      ││
+│  │  Entity Boosting │ Query Optimizer │ Self-Compacting Memory         ││
 │  └─────────────────────────────────────────────────────────────────────┘│
 ├─────────────────────────────────────────────────────────────────────────┤
 │  ┌─────────────────────────────────────────────────────────────────────┐│
 │  │                        INTERFACES                                    ││
-│  │        Chainlit UI  │  Rich CLI  │  REST API  │  Python SDK         ││
+│  │        Chainlit UI  │  Typer CLI  │  REST API  │  Python SDK        ││
 │  └─────────────────────────────────────────────────────────────────────┘│
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 📊 Why Not Postgres?
-
-| Task | Postgres + pgvector | HybridRAG |
-|------|---------------------|-----------|
-| Add metadata field | `ALTER TABLE` + backfill + reindex | Just add it |
-| Change embedding model | Rewrite entire table (MVCC bloat) | Bulk update, no rewrite |
-| Hybrid search | Manual result merging in app code | Single aggregation pipeline |
-| Filter vectors by metadata | Separate index, query planner struggles | Compound index, native |
-| Time to first query | Hours (extensions, schema, indexes) | 30 minutes (Atlas free tier) |
-
----
-
-## 🔧 Configuration
-
-```python
-from hybridrag import Settings
-
-settings = Settings(
-    # MongoDB
-    mongodb_database="hybridrag",
-
-    # Embeddings
-    embedding_model="voyage-3-large",
-    embedding_dimensions=1024,
-
-    # Reranking
-    rerank_model="rerank-2.5",
-    rerank_top_k=10,
-
-    # LLM
-    llm_provider="anthropic",  # or "openai", "gemini"
-    llm_model="claude-sonnet-4-20250514",
-
-    # Memory
-    memory_max_tokens=32000,  # Self-compaction threshold
-    
-    # Web Ingestion (optional)
-    tavily_api_key="tvly-xxxxxxxxxxxxx",  # For ingest_url() and ingest_website()
-)
-```
-
-### Web Content Ingestion
-
-HybridRAG supports web content ingestion via [Tavily](https://tavily.com) API:
-
-```python
-# Extract content from a single URL
-result = await rag.ingest_url("https://docs.mongodb.com/atlas/vector-search/")
-
-# Crawl and ingest multiple pages from a website
-results = await rag.ingest_website(
-    "https://docs.mongodb.com/atlas/",
-    max_pages=10,
-    max_depth=2
-)
-
-# Check results
-for r in results:
-    if r.success:
-        print(f"✓ {r.title}: {r.chunks_created} chunks")
-```
-
-**Features:**
-- RAG-optimized markdown content extraction
-- Automatic chunking and knowledge graph extraction
-- Same pipeline as file ingestion
-- CLI commands: `ingest-url` and `ingest-website`
-- UI actions: "🌐 Ingest URL" and "🕷️ Crawl Website" buttons
-
-**Get your Tavily API key:** https://tavily.com
-
----
-
 ## 📚 Documentation
 
-- [Installation Guide](docs/installation.md)
-- [Configuration Options](docs/configuration.md)
-- [Query Modes Explained](docs/query-modes.md)
-- [Enhanced Search Features](docs/enhanced-search.md) - Graph traversal, mix mode, entity boosting
-- [API Reference](docs/api.md)
-- [Deployment Guide](docs/deployment.md)
+| Document | Description |
+|----------|-------------|
+| [Installation Guide](docs/installation.md) | Setup and configuration |
+| [Architecture Decisions](docs/adr/) | ADRs for key decisions |
+| [Enhanced Search](docs/enhanced-search.md) | Graph traversal, mix mode |
+| [Notebooks](notebooks/) | Interactive tutorials |
+| [Examples](examples/) | Code examples |
+
+### Architecture Decision Records
+
+- [ADR-001: MongoDB Single Database](docs/adr/0001-mongodb-single-database.md)
+- [ADR-002: Voyage AI Embeddings](docs/adr/0002-voyage-ai-embeddings.md)
+- [ADR-003: Hybrid Search RRF](docs/adr/0003-hybrid-search-rrf.md)
+- [ADR-004: Prompts Module](docs/adr/0004-prompts-module-architecture.md)
+- [ADR-005: Filter Builder Systems](docs/adr/0005-filter-builder-systems.md)
+- [ADR-006: Lexical Prefilters](docs/adr/0006-lexical-prefilters.md)
+
+---
+
+## 🧪 Development
+
+```bash
+# Setup development environment
+make first-time-setup
+
+# Run tests
+make test              # All tests
+make test-quick        # Fast unit tests
+make test-cov          # With coverage
+
+# Code quality
+make lint              # Ruff linting
+make format            # Auto-format
+make typecheck         # MyPy
+
+# Full CI suite
+make ci
+```
+
+---
+
+## 📊 Why MongoDB Over Postgres?
+
+| Task | Postgres + pgvector | HybridRAG + MongoDB |
+|------|---------------------|---------------------|
+| Add metadata field | `ALTER TABLE` + backfill + reindex | Just add it |
+| Change embedding model | Rewrite entire table (MVCC bloat) | Bulk update, no rewrite |
+| Hybrid search | Manual result merging in app code | Single `$rankFusion` pipeline |
+| Lexical prefilters | Not supported | `$search.vectorSearch` native |
+| Filter vectors by metadata | Separate index, query planner struggles | Compound index, native |
+| Time to first query | Hours (extensions, schema, indexes) | 30 minutes (Atlas free tier) |
 
 ---
 
@@ -361,15 +421,12 @@ We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ```bash
 # Development setup
-git clone https://github.com/romiluz13/Hybrid-Search-RAG.git
-cd Hybrid-Search-RAG
-pip install -e ".[dev]"
+git clone https://github.com/romiluz13/HybridRAG.git
+cd HybridRAG
+make first-time-setup
 
-# Run tests
-pytest tests/ -v
-
-# Format code
-black src/ && isort src/
+# Run tests before submitting
+make ci
 ```
 
 ---
@@ -383,17 +440,18 @@ Apache License 2.0 - see [LICENSE](LICENSE) for details.
 <div align="center">
 
 ```
-╔═══════════════════════════════════════════════════════════════╗
-║                                                               ║
-║   Vector + Keyword = RRF Fusion ($rankFusion)                 ║
-║   Graph (KG) = Entity traversal in mix/local modes            ║
-║                                                               ║
-║   One MongoDB document. Atomic updates. Never inconsistent.   ║
-║                                                               ║
-╚═══════════════════════════════════════════════════════════════╝
+╔═══════════════════════════════════════════════════════════════════════════╗
+║                                                                           ║
+║   MongoDB 8.2 Native: $rankFusion • $scoreFusion • $search.vectorSearch   ║
+║                                                                           ║
+║   Three Filter Systems: Vector (MQL) • Atlas • Lexical Prefilters         ║
+║                                                                           ║
+║   One MongoDB document. Atomic updates. Never inconsistent.               ║
+║                                                                           ║
+╚═══════════════════════════════════════════════════════════════════════════╝
 ```
 
-**Made with ❤️ for the RAG community**
+**Built with MongoDB 8.2 • Voyage AI • Claude**
 
 [⬆ Back to Top](#)
 

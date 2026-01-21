@@ -1,6 +1,6 @@
-from collections.abc import AsyncIterator
 import os
 import re
+from collections.abc import AsyncIterator
 
 import pipmaster as pm
 
@@ -8,34 +8,32 @@ import pipmaster as pm
 if not pm.is_installed("ollama"):
     pm.install("ollama")
 
-import ollama
-
-from tenacity import (
-    retry,
-    stop_after_attempt,
-    wait_exponential,
-    retry_if_exception_type,
-)
-from ..exceptions import (
-    APIConnectionError,
-    RateLimitError,
-    APITimeoutError,
-)
-from .api import __api_version__
 
 import numpy as np
-from typing import Optional, Union
-from ..utils import (
-    wrap_embedding_func_with_attrs,
-    logger,
+import ollama
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
 )
 
+from ..exceptions import (
+    APIConnectionError,
+    APITimeoutError,
+    RateLimitError,
+)
+from ..utils import (
+    logger,
+    wrap_embedding_func_with_attrs,
+)
+from .api import __api_version__
 
 _OLLAMA_CLOUD_HOST = "https://ollama.com"
 _CLOUD_MODEL_SUFFIX_PATTERN = re.compile(r"(?:-cloud|:cloud)$")
 
 
-def _coerce_host_for_cloud_model(host: Optional[str], model: object) -> Optional[str]:
+def _coerce_host_for_cloud_model(host: str | None, model: object) -> str | None:
     if host:
         return host
     try:
@@ -62,10 +60,12 @@ async def _ollama_model_if_cache(
     model,
     prompt,
     system_prompt=None,
-    history_messages=[],
+    history_messages=None,
     enable_cot: bool = False,
     **kwargs,
-) -> Union[str, AsyncIterator[str]]:
+) -> str | AsyncIterator[str]:
+    if history_messages is None:
+        history_messages = []
     if enable_cot:
         logger.debug("enable_cot=True is not supported for ollama and will be ignored.")
     stream = True if kwargs.get("stream") else False
@@ -153,11 +153,13 @@ async def _ollama_model_if_cache(
 async def ollama_model_complete(
     prompt,
     system_prompt=None,
-    history_messages=[],
+    history_messages=None,
     enable_cot: bool = False,
     keyword_extraction=False,
     **kwargs,
-) -> Union[str, AsyncIterator[str]]:
+) -> str | AsyncIterator[str]:
+    if history_messages is None:
+        history_messages = []
     keyword_extraction = kwargs.pop("keyword_extraction", None)
     if keyword_extraction:
         kwargs["format"] = "json"

@@ -7,16 +7,16 @@ This module provides document processing and chunking capabilities:
 - Audio transcription via Whisper ASR
 """
 
+from .chunker import DoclingHybridChunker, create_chunker
+from .document_processor import DocumentProcessor
+from .pipeline import DocumentIngestionPipeline
 from .types import (
-    DocumentChunk,
     ChunkingConfig,
+    DocumentChunk,
     IngestionConfig,
     IngestionResult,
     ProcessedDocument,
 )
-from .chunker import DoclingHybridChunker, create_chunker
-from .document_processor import DocumentProcessor
-from .pipeline import DocumentIngestionPipeline
 
 # Tavily processor (optional dependency)
 try:

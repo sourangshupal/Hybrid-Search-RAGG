@@ -1,33 +1,35 @@
+
 import pipmaster as pm
 from llama_index.core.llms import (
     ChatMessage,
-    MessageRole,
     ChatResponse,
+    MessageRole,
 )
-from typing import List, Optional
+
 from ..utils import logger
 
 # Install required dependencies
 if not pm.is_installed("llama-index"):
     pm.install("llama-index")
 
+import numpy as np
 from llama_index.core.embeddings import BaseEmbedding
 from llama_index.core.settings import Settings as LlamaIndexSettings
 from tenacity import (
     retry,
+    retry_if_exception_type,
     stop_after_attempt,
     wait_exponential,
-    retry_if_exception_type,
+)
+
+from ..exceptions import (
+    APIConnectionError,
+    APITimeoutError,
+    RateLimitError,
 )
 from ..utils import (
     wrap_embedding_func_with_attrs,
 )
-from ..exceptions import (
-    APIConnectionError,
-    RateLimitError,
-    APITimeoutError,
-)
-import numpy as np
 
 
 def configure_llama_index(settings: LlamaIndexSettings = None, **kwargs):
@@ -92,12 +94,16 @@ def format_chat_messages(messages):
 async def llama_index_complete_if_cache(
     model: str,
     prompt: str,
-    system_prompt: Optional[str] = None,
-    history_messages: List[dict] = [],
+    system_prompt: str | None = None,
+    history_messages: list[dict] = None,
     enable_cot: bool = False,
-    chat_kwargs={},
+    chat_kwargs=None,
 ) -> str:
     """Complete the prompt using LlamaIndex."""
+    if chat_kwargs is None:
+        chat_kwargs = {}
+    if history_messages is None:
+        history_messages = []
     if enable_cot:
         logger.debug(
             "enable_cot=True is not supported for LlamaIndex implementation and will be ignored."

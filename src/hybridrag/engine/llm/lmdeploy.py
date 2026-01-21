@@ -4,20 +4,20 @@ import pipmaster as pm  # Pipmaster for dynamic library install
 if not pm.is_installed("lmdeploy"):
     pm.install("lmdeploy[all]")
 
-from ..exceptions import (
-    APIConnectionError,
-    RateLimitError,
-    APITimeoutError,
-)
+from functools import lru_cache
+
 from tenacity import (
     retry,
+    retry_if_exception_type,
     stop_after_attempt,
     wait_exponential,
-    retry_if_exception_type,
 )
 
-
-from functools import lru_cache
+from ..exceptions import (
+    APIConnectionError,
+    APITimeoutError,
+    RateLimitError,
+)
 
 
 @lru_cache(maxsize=1)
@@ -29,7 +29,7 @@ def initialize_lmdeploy_pipeline(
     model_format="hf",
     quant_policy=0,
 ):
-    from lmdeploy import pipeline, ChatTemplateConfig, TurbomindEngineConfig
+    from lmdeploy import ChatTemplateConfig, TurbomindEngineConfig, pipeline
 
     lmdeploy_pipe = pipeline(
         model_path=model,
@@ -55,7 +55,7 @@ async def lmdeploy_model_if_cache(
     model,
     prompt,
     system_prompt=None,
-    history_messages=[],
+    history_messages=None,
     enable_cot: bool = False,
     chat_template=None,
     model_format="hf",
@@ -90,6 +90,8 @@ async def lmdeploy_model_if_cache(
         do_sample (bool): Whether or not to use sampling, use greedy decoding otherwise.
             Default to be False, which means greedy decoding will be applied.
     """
+    if history_messages is None:
+        history_messages = []
     if enable_cot:
         from ..utils import logger
 
@@ -98,7 +100,7 @@ async def lmdeploy_model_if_cache(
         )
     try:
         import lmdeploy
-        from lmdeploy import version_info, GenerationConfig
+        from lmdeploy import GenerationConfig, version_info
     except Exception:
         raise ImportError("Please install lmdeploy before initialize lmdeploy backend.")
     kwargs.pop("hashing_kv", None)

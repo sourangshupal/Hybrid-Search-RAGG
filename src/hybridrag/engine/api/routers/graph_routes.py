@@ -2,20 +2,21 @@
 This module contains all graph-related routes for the HybridRAG API.
 """
 
-from typing import Optional, Dict, Any
 import traceback
-from fastapi import APIRouter, Depends, Query, HTTPException
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from .utils import logger
 from ..utils_api import get_combined_auth_dependency
+from .utils import logger
 
 router = APIRouter(tags=["graph"])
 
 
 class EntityUpdateRequest(BaseModel):
     entity_name: str
-    updated_data: Dict[str, Any]
+    updated_data: dict[str, Any]
     allow_rename: bool = False
     allow_merge: bool = False
 
@@ -23,7 +24,7 @@ class EntityUpdateRequest(BaseModel):
 class RelationUpdateRequest(BaseModel):
     source_id: str
     target_id: str
-    updated_data: Dict[str, Any]
+    updated_data: dict[str, Any]
 
 
 class EntityMergeRequest(BaseModel):
@@ -48,7 +49,7 @@ class EntityCreateRequest(BaseModel):
         min_length=1,
         examples=["Tesla"],
     )
-    entity_data: Dict[str, Any] = Field(
+    entity_data: dict[str, Any] = Field(
         ...,
         description="Dictionary containing entity properties. Common fields include 'description' and 'entity_type'.",
         examples=[
@@ -73,7 +74,7 @@ class RelationCreateRequest(BaseModel):
         min_length=1,
         examples=["Tesla"],
     )
-    relation_data: Dict[str, Any] = Field(
+    relation_data: dict[str, Any] = Field(
         ...,
         description="Dictionary containing relationship properties. Common fields include 'description', 'keywords', and 'weight'.",
         examples=[
@@ -86,7 +87,7 @@ class RelationCreateRequest(BaseModel):
     )
 
 
-def create_graph_routes(rag, api_key: Optional[str] = None):
+def create_graph_routes(rag, api_key: str | None = None):
     combined_auth = get_combined_auth_dependency(api_key)
 
     @router.get("/graph/label/list", dependencies=[Depends(combined_auth)])

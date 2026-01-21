@@ -28,7 +28,6 @@ from __future__ import annotations
 
 from typing import Final
 
-
 ENTITY_EXTRACTION_PROMPT: Final[str] = """You are a Knowledge Graph Specialist. Extract entities and relationships from the text.
 
 ## Task

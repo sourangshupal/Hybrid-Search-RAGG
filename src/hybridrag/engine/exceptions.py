@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import httpx
 from typing import Literal
+
+import httpx
 
 
 class APIStatusError(Exception):
@@ -70,7 +71,7 @@ class StorageNotInitializedError(RuntimeError):
             f"  rag = BaseRAGEngine(...)\n"
             f"  await rag.initialize_storages()  # Required - auto-initializes pipeline_status\n"
             f"\n"
-            f"See: https://github.com/romiluz13/Hybrid-Search-RAG"
+            f"See: https://github.com/romiluz13/HybridRAG"
         )
 
 

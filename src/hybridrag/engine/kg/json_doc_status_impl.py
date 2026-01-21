@@ -1,26 +1,26 @@
-from dataclasses import dataclass
 import os
-from typing import Any, Union, final
+from dataclasses import dataclass
+from typing import Any, final
 
 from ..base import (
     DocProcessingStatus,
     DocStatus,
     DocStatusStorage,
 )
+from ..exceptions import StorageNotInitializedError
 from ..utils import (
+    get_pinyin_sort_key,
     load_json,
     logger,
     write_json,
-    get_pinyin_sort_key,
 )
-from ..exceptions import StorageNotInitializedError
 from .shared_storage import (
+    clear_all_update_flags,
+    get_data_init_lock,
     get_namespace_data,
     get_namespace_lock,
-    get_data_init_lock,
     get_update_flag,
     set_all_update_flags,
-    clear_all_update_flags,
     try_initialize_namespace,
 )
 
@@ -198,7 +198,7 @@ class JsonDocStatusStorage(DocStatusStorage):
             raise StorageNotInitializedError("JsonDocStatusStorage")
         async with self._storage_lock:
             # Ensure chunks_list field exists for new documents
-            for doc_id, doc_data in data.items():
+            for _doc_id, doc_data in data.items():
                 if "chunks_list" not in doc_data:
                     doc_data["chunks_list"] = []
             self._data.update(data)
@@ -220,7 +220,7 @@ class JsonDocStatusStorage(DocStatusStorage):
         async with self._storage_lock:
             return len(self._data) == 0
 
-    async def get_by_id(self, id: str) -> Union[dict[str, Any], None]:
+    async def get_by_id(self, id: str) -> dict[str, Any] | None:
         async with self._storage_lock:
             return self._data.get(id)
 
@@ -358,7 +358,7 @@ class JsonDocStatusStorage(DocStatusStorage):
             if any_deleted:
                 await set_all_update_flags(self.namespace, workspace=self.workspace)
 
-    async def get_doc_by_file_path(self, file_path: str) -> Union[dict[str, Any], None]:
+    async def get_doc_by_file_path(self, file_path: str) -> dict[str, Any] | None:
         """Get document by file path
 
         Args:
@@ -372,7 +372,7 @@ class JsonDocStatusStorage(DocStatusStorage):
             raise StorageNotInitializedError("JsonDocStatusStorage")
 
         async with self._storage_lock:
-            for doc_id, doc_data in self._data.items():
+            for _doc_id, doc_data in self._data.items():
                 if doc_data.get("file_path") == file_path:
                     # Return complete document data, consistent with get_by_ids method
                     return doc_data

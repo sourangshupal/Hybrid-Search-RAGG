@@ -17,16 +17,17 @@ from typing import TYPE_CHECKING
 
 try:
     from rich.console import Console
+    from rich.live import Live
+    from rich.markdown import Markdown
     from rich.panel import Panel
     from rich.prompt import Prompt
-    from rich.markdown import Markdown
-    from rich.live import Live
+
     RICH_AVAILABLE = True
 except ImportError:
     RICH_AVAILABLE = False
 
-from ..core.rag import HybridRAG, create_hybridrag
 from ..config.settings import Settings, get_settings
+from ..core.rag import HybridRAG, create_hybridrag
 
 if TYPE_CHECKING:
     pass
@@ -73,8 +74,7 @@ async def display_status(rag: HybridRAG) -> None:
         return
 
     status_text = "\n".join(
-        f"[cyan]{key}:[/cyan] {value}"
-        for key, value in status.items()
+        f"[cyan]{key}:[/cyan] {value}" for key, value in status.items()
     )
     panel = Panel(
         status_text,
@@ -127,6 +127,7 @@ def display_response(response: str) -> None:
     except Exception as e:
         # Log markdown rendering failure but show raw response
         import logging
+
         logging.debug(f"Markdown rendering failed: {e}")
         console.print(response)
     console.print()
@@ -190,7 +191,9 @@ async def conversation_loop(rag: HybridRAG) -> None:
             if command == "new":
                 session_id = str(uuid.uuid4())
                 if RICH_AVAILABLE:
-                    console.print(f"[green]New session created: {session_id[:8]}...[/green]\n")
+                    console.print(
+                        f"[green]New session created: {session_id[:8]}...[/green]\n"
+                    )
                 else:
                     print(f"New session created: {session_id[:8]}...\n")
                 continue
@@ -224,6 +227,7 @@ async def conversation_loop(rag: HybridRAG) -> None:
                     continue
 
                 import os
+
                 if not os.path.exists(path):
                     if RICH_AVAILABLE:
                         console.print(f"[red]Path not found: {path}[/red]")
@@ -233,20 +237,28 @@ async def conversation_loop(rag: HybridRAG) -> None:
 
                 try:
                     if RICH_AVAILABLE:
-                        with console.status(f"[bold green]Ingesting {path}...[/bold green]"):
+                        with console.status(
+                            f"[bold green]Ingesting {path}...[/bold green]"
+                        ):
                             if os.path.isfile(path):
                                 await rag.ingest_file(path)
-                                console.print(f"[green]Successfully ingested: {path}[/green]")
+                                console.print(
+                                    f"[green]Successfully ingested: {path}[/green]"
+                                )
                             else:
                                 # It's a folder - ingest all supported files
                                 count = 0
                                 for root, _, files in os.walk(path):
                                     for f in files:
-                                        if f.endswith(('.txt', '.md', '.pdf', '.docx', '.html')):
+                                        if f.endswith(
+                                            (".txt", ".md", ".pdf", ".docx", ".html")
+                                        ):
                                             filepath = os.path.join(root, f)
                                             await rag.ingest_file(filepath)
                                             count += 1
-                                console.print(f"[green]Successfully ingested {count} files from: {path}[/green]")
+                                console.print(
+                                    f"[green]Successfully ingested {count} files from: {path}[/green]"
+                                )
                     else:
                         print(f"Ingesting {path}...")
                         if os.path.isfile(path):
@@ -256,7 +268,9 @@ async def conversation_loop(rag: HybridRAG) -> None:
                             count = 0
                             for root, _, files in os.walk(path):
                                 for f in files:
-                                    if f.endswith(('.txt', '.md', '.pdf', '.docx', '.html')):
+                                    if f.endswith(
+                                        (".txt", ".md", ".pdf", ".docx", ".html")
+                                    ):
                                         filepath = os.path.join(root, f)
                                         await rag.ingest_file(filepath)
                                         count += 1
@@ -347,9 +361,7 @@ async def conversation_loop(rag: HybridRAG) -> None:
                         max_pages = int(parts[1])
                     except ValueError:
                         if RICH_AVAILABLE:
-                            console.print(
-                                f"[red]Invalid max_pages: {parts[1]}[/red]"
-                            )
+                            console.print(f"[red]Invalid max_pages: {parts[1]}[/red]")
                         else:
                             print(f"Invalid max_pages: {parts[1]}")
                         continue
@@ -373,6 +385,7 @@ async def conversation_loop(rag: HybridRAG) -> None:
                     continue
 
                 try:
+
                     def progress_callback(current: int, total: int) -> None:
                         if RICH_AVAILABLE:
                             console.print(
@@ -386,7 +399,9 @@ async def conversation_loop(rag: HybridRAG) -> None:
                             f"[bold green]Crawling website {url}...[/bold green]"
                         ):
                             results = await rag.ingest_website(
-                                url, max_pages=max_pages, progress_callback=progress_callback
+                                url,
+                                max_pages=max_pages,
+                                progress_callback=progress_callback,
                             )
                             successful = sum(1 for r in results if r.success)
                             total_chunks = sum(r.chunks_created for r in results)
@@ -397,20 +412,22 @@ async def conversation_loop(rag: HybridRAG) -> None:
                                 f"[green]Total chunks created: {total_chunks}[/green]"
                             )
                             if successful < len(results):
-                                failed = [
-                                    r.title for r in results if not r.success
-                                ]
+                                failed = [r.title for r in results if not r.success]
                                 console.print(
                                     f"[yellow]Failed pages: {failed}[/yellow]"
                                 )
                     else:
                         print(f"Crawling website {url}...")
                         results = await rag.ingest_website(
-                            url, max_pages=max_pages, progress_callback=progress_callback
+                            url,
+                            max_pages=max_pages,
+                            progress_callback=progress_callback,
                         )
                         successful = sum(1 for r in results if r.success)
                         total_chunks = sum(r.chunks_created for r in results)
-                        print(f"Successfully ingested {successful}/{len(results)} pages")
+                        print(
+                            f"Successfully ingested {successful}/{len(results)} pages"
+                        )
                         print(f"Total chunks created: {total_chunks}")
                         if successful < len(results):
                             failed = [r.title for r in results if not r.success]

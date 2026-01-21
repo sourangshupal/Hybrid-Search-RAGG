@@ -168,8 +168,12 @@ class MongoDBHybridSearchConfig:
     cosine_threshold: float = 0.3
 
     # Lexical Prefilters (MongoDB 8.2+)
-    use_lexical_prefilters: bool = False  # Enable $search.vectorSearch with Atlas Search filters
-    lexical_prefilter_index: str = "default"  # Atlas Search index name for lexical prefilters
+    use_lexical_prefilters: bool = (
+        True  # Enable $search.vectorSearch with Atlas Search filters (recommended)
+    )
+    lexical_prefilter_index: str = (
+        "default"  # Atlas Search index name for lexical prefilters
+    )
 
     def get_search_paths(self) -> list[str]:
         """Get list of search paths."""
@@ -317,7 +321,9 @@ async def hybrid_search_with_rank_fusion(
             vector_pipeline_stage["$search"]["vectorSearch"]["filter"] = lexical_filters
 
         vector_pipeline = [vector_pipeline_stage]
-        logger.info("[HYBRID_SEARCH] Using $search.vectorSearch with lexical prefilters")
+        logger.info(
+            "[HYBRID_SEARCH] Using $search.vectorSearch with lexical prefilters"
+        )
     else:
         # Use legacy $vectorSearch with MQL filters
         vector_search_stage: dict[str, Any] = {
@@ -1293,7 +1299,6 @@ async def vector_search_with_lexical_prefilters(
         config = MongoDBHybridSearchConfig()
 
     from hybridrag.enhancements.filters import (
-        LexicalPrefilterConfig,
         build_search_vector_search_stage,
     )
 
@@ -1318,10 +1323,12 @@ async def vector_search_with_lexical_prefilters(
     pipeline: list[dict[str, Any]] = [search_stage]
 
     # Add score extraction
+    # IMPORTANT: $search.vectorSearch uses "searchScore" (NOT "vectorSearchScore")
+    # Reference: https://www.mongodb.com/docs/atlas/atlas-search/operators-collectors/vectorSearch/
     pipeline.append(
         {
             "$addFields": {
-                "similarity": {"$meta": "vectorSearchScore"},
+                "similarity": {"$meta": "searchScore"},
             }
         }
     )

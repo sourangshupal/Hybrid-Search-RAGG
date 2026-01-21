@@ -15,35 +15,35 @@ Prompt Categories:
 - Topic: Semantic tagging and topic extraction
 """
 
-from .system_prompt import (
-    SYSTEM_PROMPT,
-    SYSTEM_PROMPT_COMPACT,
-    create_system_prompt,
-)
-from .reranking_prompt import (
-    RERANK_INSTRUCTION_GENERAL,
-    RERANK_INSTRUCTION_SUMMARY,
-    RERANK_INSTRUCTION_TOOLS,
-    RERANK_INSTRUCTION_TROUBLESHOOTING,
-    QUERY_TYPE_PATTERNS,
-    QueryType,
-    detect_query_type,
-    select_rerank_instruction,
-)
 from .entity_extraction_prompt import (
     ENTITY_EXTRACTION_PROMPT,
-    QUERY_ENTITY_EXTRACTION_PROMPT,
     ENTITY_NORMALIZATION_PROMPT,
+    QUERY_ENTITY_EXTRACTION_PROMPT,
 )
 from .memory_prompt import (
     MEMORY_SUMMARIZATION_PROMPT,
     MEMORY_SUMMARIZATION_PROMPT_LITE,
     SESSION_CONTEXT_PROMPT,
 )
+from .reranking_prompt import (
+    QUERY_TYPE_PATTERNS,
+    RERANK_INSTRUCTION_GENERAL,
+    RERANK_INSTRUCTION_SUMMARY,
+    RERANK_INSTRUCTION_TOOLS,
+    RERANK_INSTRUCTION_TROUBLESHOOTING,
+    QueryType,
+    detect_query_type,
+    select_rerank_instruction,
+)
+from .system_prompt import (
+    SYSTEM_PROMPT,
+    SYSTEM_PROMPT_COMPACT,
+    create_system_prompt,
+)
 from .topic_extraction_prompt import (
-    TOPIC_EXTRACTION_PROMPT,
     BATCH_TOPIC_EXTRACTION_PROMPT,
     TOPIC_CLUSTERING_PROMPT,
+    TOPIC_EXTRACTION_PROMPT,
 )
 
 __all__ = [

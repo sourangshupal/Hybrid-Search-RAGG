@@ -21,8 +21,9 @@ import asyncio
 import os
 import sys
 import time
-from typing import Any, Dict, List
 from dataclasses import dataclass, field
+from typing import Any
+
 from dotenv import load_dotenv
 
 # Add project root to path for imports
@@ -80,7 +81,7 @@ class MigrationStats:
     failed_batches: int = 0
     successful_records: int = 0
     failed_records: int = 0
-    errors: List[Dict[str, Any]] = field(default_factory=list)
+    errors: list[dict[str, Any]] = field(default_factory=list)
 
     def add_error(self, batch_idx: int, error: Exception, batch_size: int):
         """Record batch error"""
@@ -284,7 +285,7 @@ class MigrationTool:
 
         return storage
 
-    async def get_default_caches_json(self, storage) -> Dict[str, Any]:
+    async def get_default_caches_json(self, storage) -> dict[str, Any]:
         """Get default caches from JsonKVStorage
 
         Args:
@@ -305,7 +306,7 @@ class MigrationTool:
 
     async def get_default_caches_redis(
         self, storage, batch_size: int = 1000
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Get default caches from RedisKVStorage with pagination
 
         Args:
@@ -340,7 +341,7 @@ class MigrationTool:
                                 pipe.get(key)
                             values = await pipe.execute()
 
-                            for key, value in zip(keys, values):
+                            for key, value in zip(keys, values, strict=False):
                                 if value:
                                     key_str = (
                                         key.decode() if isinstance(key, bytes) else key
@@ -385,7 +386,7 @@ class MigrationTool:
 
     async def get_default_caches_pg(
         self, storage, batch_size: int = 1000
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Get default caches from PGKVStorage with pagination
 
         Args:
@@ -447,7 +448,7 @@ class MigrationTool:
 
     async def get_default_caches_mongo(
         self, storage, batch_size: int = 1000
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Get default caches from MongoKVStorage with cursor-based pagination
 
         Args:
@@ -483,7 +484,7 @@ class MigrationTool:
 
         return cache_data
 
-    async def get_default_caches(self, storage, storage_name: str) -> Dict[str, Any]:
+    async def get_default_caches(self, storage, storage_name: str) -> dict[str, Any]:
         """Get default caches from any storage type
 
         Args:
@@ -699,7 +700,7 @@ class MigrationTool:
                             values = await pipe.execute()
 
                             batch = {}
-                            for key, value in zip(keys, values):
+                            for key, value in zip(keys, values, strict=False):
                                 if value:
                                     key_str = (
                                         key.decode() if isinstance(key, bytes) else key
@@ -862,7 +863,7 @@ class MigrationTool:
         else:
             raise ValueError(f"Unsupported storage type: {storage_name}")
 
-    async def count_cache_types(self, cache_data: Dict[str, Any]) -> Dict[str, int]:
+    async def count_cache_types(self, cache_data: dict[str, Any]) -> dict[str, int]:
         """Count cache entries by type
 
         Args:
@@ -1088,7 +1089,7 @@ class MigrationTool:
         return storage, storage_name, workspace, total_count
 
     async def migrate_caches(
-        self, source_data: Dict[str, Any], target_storage, target_storage_name: str
+        self, source_data: dict[str, Any], target_storage, target_storage_name: str
     ) -> MigrationStats:
         """Migrate caches in batches with error tracking (Legacy mode - loads all data)
 

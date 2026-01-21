@@ -99,7 +99,7 @@ class MixModeConfig:
     entity_only_weight: float = 0.5
 
     # Lexical prefiltering (MongoDB 8.2+)
-    use_lexical_prefilters: bool = False
+    use_lexical_prefilters: bool = True  # Recommended for MongoDB 8.2+
     default_lexical_prefilter: LexicalPrefilterConfig | None = None
 
 

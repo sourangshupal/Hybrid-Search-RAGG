@@ -20,28 +20,28 @@ def get_rerank_instructions(
 ) -> str | None:
     """
     Generate intelligent reranking instructions based on query mode.
-    
+
     Instructions follow Voyage AI's official patterns:
     - Short and action-oriented
     - Use "Prioritize X, then Y" hierarchical patterns
     - Keep under 150 characters for best results
-    
+
     Args:
         query_mode: The query mode being used
         custom_instructions: Custom instructions to override defaults
         enable_smart_defaults: Whether to use intelligent defaults (default: True)
-    
+
     Returns:
         Instructions string or None if disabled
     """
     # Custom instructions always take precedence
     if custom_instructions:
         return custom_instructions.strip() if custom_instructions.strip() else None
-    
+
     # If smart defaults disabled, return None
     if not enable_smart_defaults:
         return None
-    
+
     # Mode-specific instructions following Voyage AI patterns
     # Based on MongoDB blog scenarios: source prioritization, query type, temporal/importance
     instructions_map = {
@@ -66,6 +66,6 @@ def get_rerank_instructions(
         ),
         "bypass": None,  # No reranking for bypass mode
     }
-    
+
     return instructions_map.get(query_mode)
 

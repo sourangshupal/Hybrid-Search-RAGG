@@ -28,7 +28,6 @@ from __future__ import annotations
 
 from typing import Final
 
-
 TOPIC_EXTRACTION_PROMPT: Final[str] = """Extract semantic topics/tags from this text for search and categorization.
 
 ## Task

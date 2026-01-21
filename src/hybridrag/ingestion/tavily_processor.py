@@ -24,8 +24,10 @@ try:
         ForbiddenError,
         InvalidAPIKeyError,
         MissingAPIKeyError,
-        TimeoutError as TavilyTimeoutError,
         UsageLimitExceededError,
+    )
+    from tavily.errors import (
+        TimeoutError as TavilyTimeoutError,
     )
 
     TAVILY_AVAILABLE = True

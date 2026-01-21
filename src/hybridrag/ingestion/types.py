@@ -12,8 +12,7 @@ This module defines the core data structures used throughout the ingestion pipel
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 
 @dataclass

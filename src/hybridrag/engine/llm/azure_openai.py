@@ -10,8 +10,8 @@ imports from .llm.azure_openai.
 """
 
 from .llm.openai import (
-    azure_openai_complete_if_cache,
     azure_openai_complete,
+    azure_openai_complete_if_cache,
     azure_openai_embed,
 )
 

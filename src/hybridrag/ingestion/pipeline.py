@@ -14,17 +14,15 @@ This is the main entry point for batch document ingestion.
 from __future__ import annotations
 
 import asyncio
-import glob
 import logging
-import os
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any
 
-from .chunker import DoclingHybridChunker, create_chunker
+from .chunker import create_chunker
 from .document_processor import DocumentProcessor, create_document_processor
 from .types import (
-    ChunkingConfig,
     DocumentChunk,
     IngestionConfig,
     IngestionResult,
@@ -62,7 +60,7 @@ class DocumentIngestionPipeline:
 
     def __init__(
         self,
-        db: "AsyncDatabase",
+        db: AsyncDatabase,
         embedding_func: Callable[[list[str]], list[list[float]]],
         config: IngestionConfig | None = None,
         documents_collection: str = "documents",
@@ -334,7 +332,7 @@ class DocumentIngestionPipeline:
             all_embeddings.extend(embeddings)
 
         # Attach embeddings to chunks
-        for chunk, embedding in zip(chunks, all_embeddings):
+        for chunk, embedding in zip(chunks, all_embeddings, strict=False):
             chunk.embedding = embedding
 
         return chunks
@@ -401,7 +399,7 @@ class DocumentIngestionPipeline:
 
 
 def create_ingestion_pipeline(
-    db: "AsyncDatabase",
+    db: AsyncDatabase,
     embedding_func: Callable[[list[str]], list[list[float]]],
     config: IngestionConfig | None = None,
 ) -> DocumentIngestionPipeline:

@@ -1,119 +1,108 @@
 from __future__ import annotations
 
-import traceback
 import asyncio
 import inspect
 import os
 import time
-import warnings
+import traceback
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from functools import partial
 from typing import (
     Any,
-    AsyncIterator,
-    Awaitable,
-    Callable,
-    Iterator,
+    Literal,
     cast,
     final,
-    Literal,
-    Optional,
-    List,
-    Dict,
-    Union,
-)
-from .prompt import PROMPTS
-from .exceptions import PipelineCancelledException
-from .constants import (
-    DEFAULT_MAX_GLEANING,
-    DEFAULT_FORCE_LLM_SUMMARY_ON_MERGE,
-    DEFAULT_TOP_K,
-    DEFAULT_CHUNK_TOP_K,
-    DEFAULT_MAX_ENTITY_TOKENS,
-    DEFAULT_MAX_RELATION_TOKENS,
-    DEFAULT_MAX_TOTAL_TOKENS,
-    DEFAULT_COSINE_THRESHOLD,
-    DEFAULT_RELATED_CHUNK_NUMBER,
-    DEFAULT_KG_CHUNK_PICK_METHOD,
-    DEFAULT_MIN_RERANK_SCORE,
-    DEFAULT_SUMMARY_MAX_TOKENS,
-    DEFAULT_SUMMARY_CONTEXT_SIZE,
-    DEFAULT_SUMMARY_LENGTH_RECOMMENDED,
-    DEFAULT_MAX_ASYNC,
-    DEFAULT_MAX_PARALLEL_INSERT,
-    DEFAULT_MAX_GRAPH_NODES,
-    DEFAULT_MAX_SOURCE_IDS_PER_ENTITY,
-    DEFAULT_MAX_SOURCE_IDS_PER_RELATION,
-    DEFAULT_ENTITY_TYPES,
-    DEFAULT_SUMMARY_LANGUAGE,
-    DEFAULT_LLM_TIMEOUT,
-    DEFAULT_EMBEDDING_TIMEOUT,
-    DEFAULT_SOURCE_IDS_LIMIT_METHOD,
-    DEFAULT_MAX_FILE_PATHS,
-    DEFAULT_FILE_PATH_MORE_PLACEHOLDER,
-)
-from .utils import get_env_value
-
-from .kg import (
-    STORAGES,
-    verify_storage_implementation,
 )
 
-
-from .kg.shared_storage import (
-    get_namespace_data,
-    get_data_init_lock,
-    get_default_workspace,
-    set_default_workspace,
-    get_namespace_lock,
-)
+from dotenv import load_dotenv
 
 from .base import (
     BaseGraphStorage,
     BaseKVStorage,
     BaseVectorStorage,
+    DeletionResult,
     DocProcessingStatus,
     DocStatus,
     DocStatusStorage,
+    OllamaServerInfos,
     QueryParam,
+    QueryResult,
     StorageNameSpace,
     StoragesStatus,
-    DeletionResult,
-    OllamaServerInfos,
-    QueryResult,
+)
+from .constants import (
+    DEFAULT_CHUNK_TOP_K,
+    DEFAULT_COSINE_THRESHOLD,
+    DEFAULT_EMBEDDING_TIMEOUT,
+    DEFAULT_ENTITY_TYPES,
+    DEFAULT_FILE_PATH_MORE_PLACEHOLDER,
+    DEFAULT_FORCE_LLM_SUMMARY_ON_MERGE,
+    DEFAULT_KG_CHUNK_PICK_METHOD,
+    DEFAULT_LLM_TIMEOUT,
+    DEFAULT_MAX_ASYNC,
+    DEFAULT_MAX_ENTITY_TOKENS,
+    DEFAULT_MAX_FILE_PATHS,
+    DEFAULT_MAX_GLEANING,
+    DEFAULT_MAX_GRAPH_NODES,
+    DEFAULT_MAX_PARALLEL_INSERT,
+    DEFAULT_MAX_RELATION_TOKENS,
+    DEFAULT_MAX_SOURCE_IDS_PER_ENTITY,
+    DEFAULT_MAX_SOURCE_IDS_PER_RELATION,
+    DEFAULT_MAX_TOTAL_TOKENS,
+    DEFAULT_MIN_RERANK_SCORE,
+    DEFAULT_RELATED_CHUNK_NUMBER,
+    DEFAULT_SOURCE_IDS_LIMIT_METHOD,
+    DEFAULT_SUMMARY_CONTEXT_SIZE,
+    DEFAULT_SUMMARY_LANGUAGE,
+    DEFAULT_SUMMARY_LENGTH_RECOMMENDED,
+    DEFAULT_SUMMARY_MAX_TOKENS,
+    DEFAULT_TOP_K,
+    GRAPH_FIELD_SEP,
+)
+from .exceptions import PipelineCancelledException
+from .kg import (
+    STORAGES,
+    verify_storage_implementation,
+)
+from .kg.shared_storage import (
+    get_data_init_lock,
+    get_default_workspace,
+    get_namespace_data,
+    get_namespace_lock,
+    set_default_workspace,
 )
 from .namespace import NameSpace
 from .operate import (
     chunking_by_token_size,
-    chunking_by_docling,
     extract_entities,
-    merge_nodes_and_edges,
     kg_query,
+    merge_nodes_and_edges,
     naive_query,
     rebuild_knowledge_from_chunks,
 )
-from .constants import GRAPH_FIELD_SEP
+from .prompt import PROMPTS
+from .types import KnowledgeGraph
 from .utils import (
-    Tokenizer,
-    TiktokenTokenizer,
     EmbeddingFunc,
+    TiktokenTokenizer,
+    Tokenizer,
     always_get_an_event_loop,
-    compute_mdhash_id,
-    lazy_external_import,
-    priority_limit_async_func_call,
-    get_content_summary,
-    sanitize_text_for_encoding,
     check_storage_env_vars,
-    generate_track_id,
+    compute_mdhash_id,
     convert_to_user_format,
+    generate_track_id,
+    get_content_summary,
+    get_env_value,
+    lazy_external_import,
     logger,
-    subtract_source_ids,
     make_relation_chunk_key,
     normalize_source_ids_limit_method,
+    priority_limit_async_func_call,
+    sanitize_text_for_encoding,
+    subtract_source_ids,
 )
-from .types import KnowledgeGraph
-from dotenv import load_dotenv
 
 # use the .env that is inside the current folder
 # allows to use different .env file for each hybridrag instance
@@ -219,7 +208,7 @@ class BaseRAGEngine:
     )
     """Number of overlapping tokens between consecutive text chunks to preserve context."""
 
-    tokenizer: Optional[Tokenizer] = field(default=None)
+    tokenizer: Tokenizer | None = field(default=None)
     """
     A function that returns a Tokenizer instance.
     If None, and a `tiktoken_model_name` is provided, a TiktokenTokenizer will be created.
@@ -233,12 +222,12 @@ class BaseRAGEngine:
         [
             Tokenizer,
             str,
-            Optional[str],
+            str | None,
             bool,
             int,
             int,
         ],
-        Union[List[Dict[str, Any]], Awaitable[List[Dict[str, Any]]]],
+        list[dict[str, Any]] | Awaitable[list[dict[str, Any]]],
     ] = field(default_factory=lambda: chunking_by_token_size)
     """
     Custom chunking function for splitting text into chunks before processing.
@@ -427,7 +416,7 @@ class BaseRAGEngine:
         default=float(os.getenv("COSINE_THRESHOLD", 0.2))
     )
 
-    ollama_server_infos: Optional[OllamaServerInfos] = field(default=None)
+    ollama_server_infos: OllamaServerInfos | None = field(default=None)
     """Configuration for Ollama server information."""
 
     _storages_status: StoragesStatus = field(default=StoragesStatus.NOT_CREATED)
@@ -1276,7 +1265,7 @@ class BaseRAGEngine:
 
             # Generate contents dict and remove duplicates in one pass
             unique_contents = {}
-            for id_, doc, path in zip(ids, input, file_paths):
+            for id_, doc, path in zip(ids, input, file_paths, strict=False):
                 cleaned_content = sanitize_text_for_encoding(doc)
                 if cleaned_content not in unique_contents:
                     unique_contents[cleaned_content] = (id_, path)
@@ -1289,7 +1278,7 @@ class BaseRAGEngine:
         else:
             # Clean input text and remove duplicates in one pass
             unique_content_with_paths = {}
-            for doc, path in zip(input, file_paths):
+            for doc, path in zip(input, file_paths, strict=False):
                 cleaned_content = sanitize_text_for_encoding(doc)
                 if cleaned_content not in unique_content_with_paths:
                     unique_content_with_paths[cleaned_content] = path
@@ -1309,8 +1298,8 @@ class BaseRAGEngine:
                 "status": DocStatus.PENDING,
                 "content_summary": get_content_summary(content_data["content"]),
                 "content_length": len(content_data["content"]),
-                "created_at": datetime.now(timezone.utc).isoformat(),
-                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "created_at": datetime.now(UTC).isoformat(),
+                "updated_at": datetime.now(UTC).isoformat(),
                 "file_path": content_data[
                     "file_path"
                 ],  # Store file path in document status
@@ -1401,7 +1390,7 @@ class BaseRAGEngine:
             track_id = generate_track_id("error")
 
         error_docs: dict[str, Any] = {}
-        current_time = datetime.now(timezone.utc).isoformat()
+        current_time = datetime.now(UTC).isoformat()
 
         for error_file in error_files:
             file_path = error_file.get("file_path", "unknown_file")
@@ -1542,7 +1531,7 @@ class BaseRAGEngine:
                         "content_summary": status_doc.content_summary,
                         "content_length": status_doc.content_length,
                         "created_at": status_doc.created_at,
-                        "updated_at": datetime.now(timezone.utc).isoformat(),
+                        "updated_at": datetime.now(UTC).isoformat(),
                         "file_path": getattr(status_doc, "file_path", "unknown_source"),
                         "track_id": getattr(status_doc, "track_id", ""),
                         # Clear any error messages and processing metadata
@@ -1614,7 +1603,7 @@ class BaseRAGEngine:
                     {
                         "busy": True,
                         "job_name": "Default Job",
-                        "job_start": datetime.now(timezone.utc).isoformat(),
+                        "job_start": datetime.now(UTC).isoformat(),
                         "docs": 0,
                         "batchs": 0,  # Total number of files to be processed
                         "cur_batch": 0,  # Number of files already processed
@@ -1786,7 +1775,7 @@ class BaseRAGEngine:
                                 chunking_result = await chunking_result
 
                             # Validate return type
-                            if not isinstance(chunking_result, (list, tuple)):
+                            if not isinstance(chunking_result, list | tuple):
                                 raise TypeError(
                                     f"chunking_func must return a list or tuple of dicts, "
                                     f"got {type(chunking_result)}"
@@ -1829,7 +1818,7 @@ class BaseRAGEngine:
                                             "content_length": status_doc.content_length,
                                             "created_at": status_doc.created_at,
                                             "updated_at": datetime.now(
-                                                timezone.utc
+                                                UTC
                                             ).isoformat(),
                                             "file_path": file_path,
                                             "track_id": status_doc.track_id,  # Preserve existing track_id
@@ -1922,7 +1911,7 @@ class BaseRAGEngine:
                                         "content_length": status_doc.content_length,
                                         "created_at": status_doc.created_at,
                                         "updated_at": datetime.now(
-                                            timezone.utc
+                                            UTC
                                         ).isoformat(),
                                         "file_path": file_path,
                                         "track_id": status_doc.track_id,  # Preserve existing track_id
@@ -1979,7 +1968,7 @@ class BaseRAGEngine:
                                             "content_length": status_doc.content_length,
                                             "created_at": status_doc.created_at,
                                             "updated_at": datetime.now(
-                                                timezone.utc
+                                                UTC
                                             ).isoformat(),
                                             "file_path": file_path,
                                             "track_id": status_doc.track_id,  # Preserve existing track_id
@@ -2885,7 +2874,7 @@ class BaseRAGEngine:
         tasks = [self.doc_status.get_by_id(doc_id) for doc_id in id_list]
         # Execute tasks concurrently and gather the results. Results maintain order.
         # Type hint indicates results can be DocProcessingStatus or None if not found.
-        results_list: list[Optional[DocProcessingStatus]] = await asyncio.gather(*tasks)
+        results_list: list[DocProcessingStatus | None] = await asyncio.gather(*tasks)
 
         # Build the result dictionary, mapping found IDs to their statuses
         found_statuses: dict[str, DocProcessingStatus] = {}
@@ -2976,7 +2965,7 @@ class BaseRAGEngine:
                     {
                         "busy": True,
                         "job_name": "Single document deletion",
-                        "job_start": datetime.now(timezone.utc).isoformat(),
+                        "job_start": datetime.now(UTC).isoformat(),
                         "docs": 1,
                         "batchs": 1,
                         "cur_batch": 0,
@@ -3429,7 +3418,7 @@ class BaseRAGEngine:
                     edges_to_delete = set()
                     edges_still_exist = 0
 
-                    for entity, edges in nodes_edges_dict.items():
+                    for _entity, edges in nodes_edges_dict.items():
                         if edges:
                             for src, tgt in edges:
                                 # Normalize edge representation (sorted for consistency)

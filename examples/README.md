@@ -151,6 +151,6 @@ export ANTHROPIC_API_KEY="sk-ant-..."  # Or other LLM
 
 ## More Resources
 
-- [HybridRAG Documentation](https://github.com/romiluz13/Hybrid-Search-RAG)
+- [HybridRAG Documentation](https://github.com/romiluz13/HybridRAG)
 - [MongoDB Atlas Vector Search](https://www.mongodb.com/docs/atlas/atlas-vector-search/)
 - [Voyage AI Documentation](https://docs.voyageai.com/)

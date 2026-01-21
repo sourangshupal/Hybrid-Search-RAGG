@@ -1,73 +1,75 @@
 from __future__ import annotations
-from functools import partial
-from pathlib import Path
 
 import asyncio
 import json
-import json_repair
-from typing import Any, AsyncIterator, overload, Literal
+import time
 from collections import Counter, defaultdict
+from collections.abc import AsyncIterator
+from functools import partial
+from pathlib import Path
+from typing import Any, Literal, overload
 
-from .exceptions import (
-    PipelineCancelledException,
-    ChunkTokenLimitExceededError,
-)
-from .utils import (
-    logger,
-    compute_mdhash_id,
-    Tokenizer,
-    is_float_regex,
-    sanitize_and_normalize_extracted_text,
-    pack_user_ass_to_openai_messages,
-    split_string_by_multi_markers,
-    truncate_list_by_token_size,
-    compute_args_hash,
-    handle_cache,
-    save_to_cache,
-    CacheData,
-    use_llm_func_with_cache,
-    update_chunk_cache_list,
-    remove_think_tags,
-    pick_by_weighted_polling,
-    pick_by_vector_similarity,
-    process_chunks_unified,
-    safe_vdb_operation_with_exception,
-    create_prefixed_exception,
-    fix_tuple_delimiter_corruption,
-    convert_to_user_format,
-    generate_reference_list_from_chunks,
-    apply_source_ids_limit,
-    merge_source_ids,
-    make_relation_chunk_key,
-)
+import json_repair
+from dotenv import load_dotenv
+
 from .base import (
     BaseGraphStorage,
     BaseKVStorage,
     BaseVectorStorage,
-    TextChunkSchema,
+    QueryContextResult,
     QueryParam,
     QueryResult,
-    QueryContextResult,
+    TextChunkSchema,
 )
-from .prompt import PROMPTS
 from .constants import (
-    GRAPH_FIELD_SEP,
+    DEFAULT_ENTITY_NAME_MAX_LENGTH,
+    DEFAULT_ENTITY_TYPES,
+    DEFAULT_FILE_PATH_MORE_PLACEHOLDER,
+    DEFAULT_KG_CHUNK_PICK_METHOD,
     DEFAULT_MAX_ENTITY_TOKENS,
+    DEFAULT_MAX_FILE_PATHS,
     DEFAULT_MAX_RELATION_TOKENS,
     DEFAULT_MAX_TOTAL_TOKENS,
     DEFAULT_RELATED_CHUNK_NUMBER,
-    DEFAULT_KG_CHUNK_PICK_METHOD,
-    DEFAULT_ENTITY_TYPES,
     DEFAULT_SUMMARY_LANGUAGE,
-    SOURCE_IDS_LIMIT_METHOD_KEEP,
+    GRAPH_FIELD_SEP,
     SOURCE_IDS_LIMIT_METHOD_FIFO,
-    DEFAULT_FILE_PATH_MORE_PLACEHOLDER,
-    DEFAULT_MAX_FILE_PATHS,
-    DEFAULT_ENTITY_NAME_MAX_LENGTH,
+    SOURCE_IDS_LIMIT_METHOD_KEEP,
+)
+from .exceptions import (
+    ChunkTokenLimitExceededError,
+    PipelineCancelledException,
 )
 from .kg.shared_storage import get_storage_keyed_lock
-import time
-from dotenv import load_dotenv
+from .prompt import PROMPTS
+from .utils import (
+    CacheData,
+    Tokenizer,
+    apply_source_ids_limit,
+    compute_args_hash,
+    compute_mdhash_id,
+    convert_to_user_format,
+    create_prefixed_exception,
+    fix_tuple_delimiter_corruption,
+    generate_reference_list_from_chunks,
+    handle_cache,
+    is_float_regex,
+    logger,
+    make_relation_chunk_key,
+    merge_source_ids,
+    pack_user_ass_to_openai_messages,
+    pick_by_vector_similarity,
+    pick_by_weighted_polling,
+    process_chunks_unified,
+    remove_think_tags,
+    safe_vdb_operation_with_exception,
+    sanitize_and_normalize_extracted_text,
+    save_to_cache,
+    split_string_by_multi_markers,
+    truncate_list_by_token_size,
+    update_chunk_cache_list,
+    use_llm_func_with_cache,
+)
 
 # use the .env that is inside the current folder
 # allows to use different .env file for each hybridrag instance
@@ -329,7 +331,7 @@ async def _handle_entity_relation_summary(
         current_tokens = 0
 
         # Currently least 3 descriptions in current_list
-        for i, desc in enumerate(current_list):
+        for _i, desc in enumerate(current_list):
             desc_tokens = len(tokenizer.encode(desc))
 
             # If adding current description would exceed limit, finalize current chunk
@@ -388,9 +390,9 @@ async def _handle_entity_relation_summary(
             llm_was_used = True
             # Execute all summarization tasks concurrently
             results = await asyncio.gather(*(t[1] for t in tasks))
-            
+
             # Place results back into their original positions
-            for (task_index, _), result in zip(tasks, results):
+            for (task_index, _), result in zip(tasks, results, strict=False):
                 valid_chunks[task_index] = result
 
         # Filter out any None values (shouldn't happen but safe to check)
@@ -449,13 +451,13 @@ async def _summarize_descriptions(
     )
 
     # Prepare context for the prompt
-    context_base = dict(
-        description_type=description_type,
-        description_name=description_name,
-        description_list=joined_descriptions,
-        summary_length=summary_length_recommended,
-        language=language,
-    )
+    context_base = {
+        "description_type": description_type,
+        "description_name": description_name,
+        "description_list": joined_descriptions,
+        "summary_length": summary_length_recommended,
+        "language": language,
+    }
     use_prompt = prompt_template.format(**context_base)
 
     # Use LLM function with cache (higher priority for summary generation)
@@ -533,14 +535,14 @@ async def _handle_single_entity_extraction(
             )
             return None
 
-        return dict(
-            entity_name=entity_name,
-            entity_type=entity_type,
-            description=entity_description,
-            source_id=chunk_key,
-            file_path=file_path,
-            timestamp=timestamp,
-        )
+        return {
+            "entity_name": entity_name,
+            "entity_type": entity_type,
+            "description": entity_description,
+            "source_id": chunk_key,
+            "file_path": file_path,
+            "timestamp": timestamp,
+        }
 
     except ValueError as e:
         logger.error(
@@ -613,16 +615,16 @@ async def _handle_single_relationship_extraction(
             else 1.0
         )
 
-        return dict(
-            src_id=source,
-            tgt_id=target,
-            weight=weight,
-            description=edge_description,
-            keywords=edge_keywords,
-            source_id=edge_source_id,
-            file_path=file_path,
-            timestamp=timestamp,
-        )
+        return {
+            "src_id": source,
+            "tgt_id": target,
+            "weight": weight,
+            "description": edge_description,
+            "keywords": edge_keywords,
+            "source_id": edge_source_id,
+            "file_path": file_path,
+            "timestamp": timestamp,
+        }
 
     except ValueError as e:
         logger.warning(
@@ -1938,15 +1940,15 @@ async def _merge_nodes_then_upsert(
         logger.debug(status_message)
 
     # 11. Update both graph and vector db
-    node_data = dict(
-        entity_id=entity_name,
-        entity_type=entity_type,
-        description=description,
-        source_id=source_id,
-        file_path=file_path,
-        created_at=int(time.time()),
-        truncate=truncation_info,
-    )
+    node_data = {
+        "entity_id": entity_name,
+        "entity_type": entity_type,
+        "description": description,
+        "source_id": source_id,
+        "file_path": file_path,
+        "created_at": int(time.time()),
+        "truncate": truncation_info,
+    }
     await knowledge_graph_inst.upsert_node(
         entity_name,
         node_data=node_data,
@@ -2441,28 +2443,28 @@ async def _merge_edges_then_upsert(
     await knowledge_graph_inst.upsert_edge(
         src_id,
         tgt_id,
-        edge_data=dict(
-            weight=weight,
-            description=description,
-            keywords=keywords,
-            source_id=source_id,
-            file_path=file_path,
-            created_at=edge_created_at,
-            truncate=truncation_info,
-        ),
+        edge_data={
+            "weight": weight,
+            "description": description,
+            "keywords": keywords,
+            "source_id": source_id,
+            "file_path": file_path,
+            "created_at": edge_created_at,
+            "truncate": truncation_info,
+        },
     )
 
-    edge_data = dict(
-        src_id=src_id,
-        tgt_id=tgt_id,
-        description=description,
-        keywords=keywords,
-        source_id=source_id,
-        file_path=file_path,
-        created_at=edge_created_at,
-        truncate=truncation_info,
-        weight=weight,
-    )
+    edge_data = {
+        "src_id": src_id,
+        "tgt_id": tgt_id,
+        "description": description,
+        "keywords": keywords,
+        "source_id": source_id,
+        "file_path": file_path,
+        "created_at": edge_created_at,
+        "truncate": truncation_info,
+        "weight": weight,
+    }
 
     # Sort src_id and tgt_id to ensure consistent ordering (smaller string first)
     if src_id > tgt_id:
@@ -2899,22 +2901,22 @@ async def extract_entities(
 
     examples = "\n".join(PROMPTS["entity_extraction_examples"])
 
-    example_context_base = dict(
-        tuple_delimiter=PROMPTS["DEFAULT_TUPLE_DELIMITER"],
-        completion_delimiter=PROMPTS["DEFAULT_COMPLETION_DELIMITER"],
-        entity_types=", ".join(entity_types),
-        language=language,
-    )
+    example_context_base = {
+        "tuple_delimiter": PROMPTS["DEFAULT_TUPLE_DELIMITER"],
+        "completion_delimiter": PROMPTS["DEFAULT_COMPLETION_DELIMITER"],
+        "entity_types": ", ".join(entity_types),
+        "language": language,
+    }
     # add example's format
     examples = examples.format(**example_context_base)
 
-    context_base = dict(
-        tuple_delimiter=PROMPTS["DEFAULT_TUPLE_DELIMITER"],
-        completion_delimiter=PROMPTS["DEFAULT_COMPLETION_DELIMITER"],
-        entity_types=",".join(entity_types),
-        examples=examples,
-        language=language,
-    )
+    context_base = {
+        "tuple_delimiter": PROMPTS["DEFAULT_TUPLE_DELIMITER"],
+        "completion_delimiter": PROMPTS["DEFAULT_COMPLETION_DELIMITER"],
+        "entity_types": ",".join(entity_types),
+        "examples": examples,
+        "language": language,
+    }
 
     processed_chunks = 0
     total_chunks = len(ordered_chunks)
@@ -3744,10 +3746,10 @@ async def _apply_token_truncation(
 
     # Generate entities context for truncation
     entities_context = []
-    for i, entity in enumerate(final_entities):
+    for _i, entity in enumerate(final_entities):
         entity_name = entity["entity_name"]
         created_at = entity.get("created_at", "UNKNOWN")
-        if isinstance(created_at, (int, float)):
+        if isinstance(created_at, int | float):
             created_at = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(created_at))
 
         # Store mapping from entity name to original data
@@ -3765,9 +3767,9 @@ async def _apply_token_truncation(
 
     # Generate relations context for truncation
     relations_context = []
-    for i, relation in enumerate(final_relations):
+    for _i, relation in enumerate(final_relations):
         created_at = relation.get("created_at", "UNKNOWN")
-        if isinstance(created_at, (int, float)):
+        if isinstance(created_at, int | float):
             created_at = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(created_at))
 
         # Handle different relation data formats
@@ -4083,7 +4085,7 @@ async def _build_context_str(
     # Rebuild chunks_context with truncated chunks
     # The actual tokens may be slightly less than available_chunk_tokens due to deduplication logic
     chunks_context = []
-    for i, chunk in enumerate(truncated_chunks):
+    for _i, chunk in enumerate(truncated_chunks):
         chunks_context.append(
             {
                 "reference_id": chunk["reference_id"],
@@ -4312,7 +4314,7 @@ async def _get_node_data(
     node_datas = [nodes_dict.get(nid) for nid in node_ids]
     node_degrees = [degrees_dict.get(nid, 0) for nid in node_ids]
 
-    if not all([n is not None for n in node_datas]):
+    if not all(n is not None for n in node_datas):
         logger.warning("Some nodes are missing, maybe the storage is damaged")
 
     node_datas = [
@@ -4322,7 +4324,7 @@ async def _get_node_data(
             "rank": d,
             "created_at": k.get("created_at"),
         }
-        for k, n, d in zip(results, node_datas, node_degrees)
+        for k, n, d in zip(results, node_datas, node_degrees, strict=False)
         if n is not None
     ]
 
@@ -4538,7 +4540,7 @@ async def _find_related_text_unit_from_entities(
 
     # Step 6: Build result chunks with valid data and update chunk tracking
     result_chunks = []
-    for i, (chunk_id, chunk_data) in enumerate(zip(unique_chunk_ids, chunk_data_list)):
+    for i, (chunk_id, chunk_data) in enumerate(zip(unique_chunk_ids, chunk_data_list, strict=False)):
         if chunk_data is not None and "content" in chunk_data:
             chunk_data_copy = chunk_data.copy()
             chunk_data_copy["source_type"] = "entity"
@@ -4830,7 +4832,7 @@ async def _find_related_text_unit_from_relations(
 
     # Step 6: Build result chunks with valid data and update chunk tracking
     result_chunks = []
-    for i, (chunk_id, chunk_data) in enumerate(zip(unique_chunk_ids, chunk_data_list)):
+    for i, (chunk_id, chunk_data) in enumerate(zip(unique_chunk_ids, chunk_data_list, strict=False)):
         if chunk_data is not None and "content" in chunk_data:
             chunk_data_copy = chunk_data.copy()
             chunk_data_copy["source_type"] = "relationship"
@@ -5003,7 +5005,7 @@ async def naive_query(
 
     # Build chunks_context from processed chunks with reference IDs
     chunks_context = []
-    for i, chunk in enumerate(processed_chunks_with_ref_ids):
+    for _i, chunk in enumerate(processed_chunks_with_ref_ids):
         chunks_context.append(
             {
                 "reference_id": chunk["reference_id"],

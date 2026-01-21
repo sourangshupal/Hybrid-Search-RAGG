@@ -1,19 +1,18 @@
-from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel
-from typing import List, Dict, Any, Optional, Type
-from .utils import logger
-import time
+import asyncio
 import json
 import re
+import time
 from enum import Enum
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
-import asyncio
-import asyncio
-from ...base_engine import BaseRAGEngine as RAGEngine
+from pydantic import BaseModel
+
 from ...base import QueryParam
-from .utils import TiktokenTokenizer
+from ...base_engine import BaseRAGEngine as RAGEngine
+from .utils import TiktokenTokenizer, logger
 from .utils_api import get_combined_auth_dependency
-from fastapi import Depends
 
 
 # query mode according to query prefix (bypass is not HybridRAG query mode)
@@ -30,15 +29,15 @@ class SearchMode(str, Enum):
 class OllamaMessage(BaseModel):
     role: str
     content: str
-    images: Optional[List[str]] = None
+    images: list[str] | None = None
 
 
 class OllamaChatRequest(BaseModel):
     model: str
-    messages: List[OllamaMessage]
+    messages: list[OllamaMessage]
     stream: bool = True
-    options: Optional[Dict[str, Any]] = None
-    system: Optional[str] = None
+    options: dict[str, Any] | None = None
+    system: str | None = None
 
 
 class OllamaChatResponse(BaseModel):
@@ -51,9 +50,9 @@ class OllamaChatResponse(BaseModel):
 class OllamaGenerateRequest(BaseModel):
     model: str
     prompt: str
-    system: Optional[str] = None
+    system: str | None = None
     stream: bool = False
-    options: Optional[Dict[str, Any]] = None
+    options: dict[str, Any] | None = None
 
 
 class OllamaGenerateResponse(BaseModel):
@@ -61,13 +60,13 @@ class OllamaGenerateResponse(BaseModel):
     created_at: str
     response: str
     done: bool
-    context: Optional[List[int]]
-    total_duration: Optional[int]
-    load_duration: Optional[int]
-    prompt_eval_count: Optional[int]
-    prompt_eval_duration: Optional[int]
-    eval_count: Optional[int]
-    eval_duration: Optional[int]
+    context: list[int] | None
+    total_duration: int | None
+    load_duration: int | None
+    prompt_eval_count: int | None
+    prompt_eval_duration: int | None
+    eval_count: int | None
+    eval_duration: int | None
 
 
 class OllamaVersionResponse(BaseModel):
@@ -78,7 +77,7 @@ class OllamaModelDetails(BaseModel):
     parent_model: str
     format: str
     family: str
-    families: List[str]
+    families: list[str]
     parameter_size: str
     quantization_level: str
 
@@ -93,14 +92,14 @@ class OllamaModel(BaseModel):
 
 
 class OllamaTagResponse(BaseModel):
-    models: List[OllamaModel]
+    models: list[OllamaModel]
 
 
 class OllamaRunningModelDetails(BaseModel):
     parent_model: str
     format: str
     family: str
-    families: List[str]
+    families: list[str]
     parameter_size: str
     quantization_level: str
 
@@ -116,11 +115,11 @@ class OllamaRunningModel(BaseModel):
 
 
 class OllamaPsResponse(BaseModel):
-    models: List[OllamaRunningModel]
+    models: list[OllamaRunningModel]
 
 
 async def parse_request_body(
-    request: Request, model_class: Type[BaseModel]
+    request: Request, model_class: type[BaseModel]
 ) -> BaseModel:
     """
     Parse request body based on Content-Type header.
@@ -164,7 +163,7 @@ def estimate_tokens(text: str) -> int:
     return len(tokens)
 
 
-def parse_query_mode(query: str) -> tuple[str, SearchMode, bool, Optional[str]]:
+def parse_query_mode(query: str) -> tuple[str, SearchMode, bool, str | None]:
     """Parse query prefix to determine search mode
     Returns tuple of (cleaned_query, search_mode, only_need_context, user_prompt)
 
@@ -220,7 +219,7 @@ def parse_query_mode(query: str) -> tuple[str, SearchMode, bool, Optional[str]]:
 
 
 class OllamaAPI:
-    def __init__(self, rag: RAGEngine, top_k: int = 60, api_key: Optional[str] = None):
+    def __init__(self, rag: RAGEngine, top_k: int = 60, api_key: str | None = None):
         self.rag = rag
         self.ollama_server_infos = rag.ollama_server_infos
         self.top_k = top_k

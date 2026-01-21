@@ -9,6 +9,6 @@ Provides both command-line and interactive interfaces for HybridRAG with:
 """
 
 from .app import run as run_cli
-from .main import main, conversation_loop
+from .main import conversation_loop, main
 
 __all__ = ["run_cli", "main", "conversation_loop"]

@@ -2,21 +2,22 @@
 Utility functions for the HybridRAG API.
 """
 
-import os
 import argparse
-from typing import Optional, List, Tuple
+import os
 import sys
+
 from ascii_colors import ASCIIColors
-from .api import __api_version__ as api_version
+from fastapi import HTTPException, Request, Security, status
+from fastapi.security import APIKeyHeader, OAuth2PasswordBearer
+from starlette.status import HTTP_403_FORBIDDEN
+
 from . import __version__ as core_version
+from .api import __api_version__ as api_version
+from .auth import auth_handler
+from .config import get_env_value, global_args, ollama_server_infos
 from .constants import (
     DEFAULT_FORCE_LLM_SUMMARY_ON_MERGE,
 )
-from fastapi import HTTPException, Security, Request, status
-from fastapi.security import APIKeyHeader, OAuth2PasswordBearer
-from starlette.status import HTTP_403_FORBIDDEN
-from .auth import auth_handler
-from .config import ollama_server_infos, global_args, get_env_value
 
 
 def check_env_file():
@@ -41,7 +42,7 @@ def check_env_file():
 whitelist_paths = global_args.whitelist_paths.split(",")
 
 # Pre-compile path matching patterns
-whitelist_patterns: List[Tuple[str, bool]] = []
+whitelist_patterns: list[tuple[str, bool]] = []
 for path in whitelist_paths:
     path = path.strip()
     if path:
@@ -56,7 +57,7 @@ for path in whitelist_paths:
 auth_configured = bool(auth_handler.accounts)
 
 
-def get_combined_auth_dependency(api_key: Optional[str] = None):
+def get_combined_auth_dependency(api_key: str | None = None):
     """
     Create a combined authentication dependency that implements authentication logic
     based on API key, OAuth2 token, and whitelist paths.
@@ -88,7 +89,7 @@ def get_combined_auth_dependency(api_key: Optional[str] = None):
     async def combined_dependency(
         request: Request,
         token: str = Security(oauth2_scheme),
-        api_key_header_value: Optional[str] = None
+        api_key_header_value: str | None = None
         if api_key_header is None
         else Security(api_key_header),
     ):

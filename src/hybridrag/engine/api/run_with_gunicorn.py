@@ -4,18 +4,19 @@ Start HybridRAG server with Gunicorn
 """
 
 import os
-import sys
 import platform
+import sys
+
 import pipmaster as pm
-from .utils_api import display_splash_screen, check_env_file
-from .config import global_args
-from ..utils import get_env_value
-from ..kg.shared_storage import initialize_share_data
 
 from ..constants import (
-    DEFAULT_WOKERS,
     DEFAULT_TIMEOUT,
+    DEFAULT_WOKERS,
 )
+from ..kg.shared_storage import initialize_share_data
+from ..utils import get_env_value
+from .config import global_args
+from .utils_api import check_env_file, display_splash_screen
 
 
 def check_and_install_dependencies():
@@ -252,7 +253,7 @@ def main():
 
             if hasattr(gunicorn_config, "logconfig_dict"):
                 self.cfg.set(
-                    "logconfig_dict", getattr(gunicorn_config, "logconfig_dict")
+                    "logconfig_dict", gunicorn_config.logconfig_dict
                 )
 
         def load(self):

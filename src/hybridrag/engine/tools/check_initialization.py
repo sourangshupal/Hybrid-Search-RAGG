@@ -24,6 +24,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from hybridrag.engine.base_engine import BaseRAGEngine
+
 from .base import StoragesStatus
 
 
@@ -131,7 +132,7 @@ async def check_lightrag_setup(rag_instance: BaseRAGEngine, verbose: bool = Fals
 
 async def demo():
     """Demonstrate the diagnostic tool with a test instance."""
-    from .llm.openai import openai_embed, gpt_4o_mini_complete
+    from .llm.openai import gpt_4o_mini_complete, openai_embed
 
     print("=" * 50)
     print("HybridRAG Initialization Diagnostic Tool")

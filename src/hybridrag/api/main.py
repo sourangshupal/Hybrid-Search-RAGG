@@ -19,12 +19,12 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from ..core.rag import HybridRAG, create_hybridrag
 from .models import (
+    ErrorResponse,
+    HealthResponse,
     IngestRequest,
     IngestResponse,
     QueryRequest,
     QueryResponse,
-    HealthResponse,
-    ErrorResponse,
 )
 
 if TYPE_CHECKING:

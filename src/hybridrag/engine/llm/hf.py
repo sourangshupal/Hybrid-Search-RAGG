@@ -12,20 +12,21 @@ if not pm.is_installed("torch"):
 if not pm.is_installed("numpy"):
     pm.install("numpy")
 
-from transformers import AutoTokenizer, AutoModelForCausalLM
+import numpy as np
+import torch
 from tenacity import (
     retry,
+    retry_if_exception_type,
     stop_after_attempt,
     wait_exponential,
-    retry_if_exception_type,
 )
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
 from ..exceptions import (
     APIConnectionError,
-    RateLimitError,
     APITimeoutError,
+    RateLimitError,
 )
-import torch
-import numpy as np
 from ..utils import wrap_embedding_func_with_attrs
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -56,10 +57,12 @@ async def hf_model_if_cache(
     model,
     prompt,
     system_prompt=None,
-    history_messages=[],
+    history_messages=None,
     enable_cot: bool = False,
     **kwargs,
 ) -> str:
+    if history_messages is None:
+        history_messages = []
     if enable_cot:
         from ..utils import logger
 
@@ -124,11 +127,13 @@ async def hf_model_if_cache(
 async def hf_model_complete(
     prompt,
     system_prompt=None,
-    history_messages=[],
+    history_messages=None,
     keyword_extraction=False,
     enable_cot: bool = False,
     **kwargs,
 ) -> str:
+    if history_messages is None:
+        history_messages = []
     kwargs.pop("keyword_extraction", None)
     model_name = kwargs["hashing_kv"].global_config["llm_model_name"]
     result = await hf_model_if_cache(

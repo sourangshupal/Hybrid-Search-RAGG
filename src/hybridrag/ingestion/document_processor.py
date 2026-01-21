@@ -17,14 +17,13 @@ The original DoclingDocument is preserved for HybridChunker usage.
 from __future__ import annotations
 
 import logging
-import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from .types import ProcessedDocument
 
 if TYPE_CHECKING:
-    from docling_core.types.doc import DoclingDocument
+    pass
 
 logger = logging.getLogger("hybridrag.ingestion.document_processor")
 
@@ -92,13 +91,13 @@ class DocumentProcessor:
         """Lazy initialization of audio converter with Whisper ASR."""
         if self._audio_converter is None:
             try:
-                from docling.document_converter import (
-                    DocumentConverter,
-                    AudioFormatOption,
-                )
-                from docling.datamodel.pipeline_options import AsrPipelineOptions
                 from docling.datamodel import asr_model_specs
                 from docling.datamodel.base_models import InputFormat
+                from docling.datamodel.pipeline_options import AsrPipelineOptions
+                from docling.document_converter import (
+                    AudioFormatOption,
+                    DocumentConverter,
+                )
                 from docling.pipeline.asr_pipeline import AsrPipeline
 
                 # Configure ASR pipeline with Whisper Turbo model
@@ -142,7 +141,6 @@ class DocumentProcessor:
             raise FileNotFoundError(f"File not found: {file_path}")
 
         file_ext = file_path.suffix.lower()
-        file_name = file_path.stem
 
         logger.info(f"Processing file: {file_path.name} (format: {file_ext})")
 
@@ -202,7 +200,7 @@ class DocumentProcessor:
 
         except Exception as e:
             logger.error(f"Docling conversion failed for {file_path}: {e}")
-            
+
             # Try PyMuPDF (fitz) fallback for PDFs
             if file_path.suffix.lower() == ".pdf":
                 try:
@@ -210,7 +208,7 @@ class DocumentProcessor:
                     return self._process_pdf_fitz(file_path)
                 except Exception as fitz_e:
                     logger.error(f"PyMuPDF fallback failed: {fitz_e}")
-            
+
             # Try fallback to text read
             logger.warning(f"Attempting fallback text read for {file_path}")
             return self._process_text(file_path)
@@ -218,36 +216,36 @@ class DocumentProcessor:
     def _process_pdf_fitz(self, file_path: Path) -> ProcessedDocument:
         """
         Process PDF using PyMuPDF (fitz).
-        
+
         Args:
             file_path: Path to PDF file.
-            
+
         Returns:
             ProcessedDocument.
         """
         try:
             import fitz
-            
+
             doc = fitz.open(file_path)
             content = ""
-            
+
             # Extract text from each page
             for page in doc:
                 text = page.get_text()
                 content += text + "\n\n"
-                
+
             doc.close()
-            
+
             # Use filename as title if no metadata found
             title = doc.metadata.get("title") if doc.metadata else None
             if not title or title.strip() == "":
                 title = file_path.stem
-                
+
             metadata = self._build_metadata(file_path)
             metadata["pdf_producer"] = doc.metadata.get("producer", "unknown") if doc.metadata else "unknown"
-            
+
             logger.info(f"Successfully processed PDF with PyMuPDF: {file_path.name}")
-            
+
             return ProcessedDocument(
                 content=content,
                 title=title,
@@ -256,7 +254,7 @@ class DocumentProcessor:
                 docling_document=None,
                 format_type="pdf",
             )
-            
+
         except ImportError:
             raise ImportError("PyMuPDF (fitz) not installed")
         except Exception as e:

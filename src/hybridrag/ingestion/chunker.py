@@ -60,8 +60,8 @@ class DoclingHybridChunker:
             return
 
         try:
-            from transformers import AutoTokenizer
             from docling.chunking import HybridChunker
+            from transformers import AutoTokenizer
 
             logger.info(f"Initializing tokenizer: {self.config.tokenizer_model}")
             self._tokenizer = AutoTokenizer.from_pretrained(self.config.tokenizer_model)
@@ -89,7 +89,7 @@ class DoclingHybridChunker:
         title: str,
         source: str,
         metadata: dict[str, Any] | None = None,
-        docling_doc: "DoclingDocument | None" = None,
+        docling_doc: DoclingDocument | None = None,
     ) -> list[DocumentChunk]:
         """
         Chunk a document using Docling's HybridChunker.

@@ -30,8 +30,57 @@ For API usage:
 """
 
 # Core exports
-from .core.rag import HybridRAG, create_hybridrag
 from .config.settings import Settings, get_settings
+from .core.rag import HybridRAG, create_hybridrag
+
+# Enhancement exports
+from .enhancements.entity_boosting import (
+    EntityBoostingReranker,
+    create_boosted_rerank_func,
+)
+from .enhancements.filters import (
+    AtlasSearchFilterConfig,
+    FuzzyFilter,
+    GeoFilter,
+    LexicalPrefilterConfig,
+    PhraseFilter,
+    QueryStringFilter,
+    TextFilter,
+    VectorSearchFilterConfig,
+    WildcardFilter,
+    build_lexical_prefilters,
+    build_search_vector_search_stage,
+)
+from .enhancements.implicit_expansion import ImplicitExpander
+from .enhancements.mongodb_hybrid_search import (
+    MongoDBHybridSearchConfig,
+    SearchResult,
+    manual_hybrid_search_with_rrf,
+    reciprocal_rank_fusion,
+    vector_search_with_lexical_prefilters,
+)
+
+# Ingestion exports (document processing and chunking)
+from .ingestion import (
+    ChunkingConfig,
+    DoclingHybridChunker,
+    DocumentChunk,
+    DocumentIngestionPipeline,
+    DocumentProcessor,
+    IngestionConfig,
+    IngestionResult,
+    ProcessedDocument,
+)
+
+# Observability exports (Langfuse)
+from .integrations import (
+    flush_langfuse,
+    get_langfuse,
+    langfuse_enabled,
+    langfuse_status,
+    log_ingestion,
+    log_rag_query,
+)
 
 # Integration exports
 from .integrations.voyage import (
@@ -41,57 +90,8 @@ from .integrations.voyage import (
     create_rerank_func,
 )
 
-# Enhancement exports
-from .enhancements.entity_boosting import (
-    EntityBoostingReranker,
-    create_boosted_rerank_func,
-)
-from .enhancements.implicit_expansion import ImplicitExpander
-from .enhancements.mongodb_hybrid_search import (
-    SearchResult,
-    MongoDBHybridSearchConfig,
-    manual_hybrid_search_with_rrf,
-    reciprocal_rank_fusion,
-    vector_search_with_lexical_prefilters,
-)
-from .enhancements.filters import (
-    LexicalPrefilterConfig,
-    VectorSearchFilterConfig,
-    AtlasSearchFilterConfig,
-    build_lexical_prefilters,
-    build_search_vector_search_stage,
-    TextFilter,
-    FuzzyFilter,
-    PhraseFilter,
-    WildcardFilter,
-    GeoFilter,
-    QueryStringFilter,
-)
-
 # Memory exports (conversation session management)
 from .memory import ConversationMemory, ConversationSession
-
-# Ingestion exports (document processing and chunking)
-from .ingestion import (
-    DocumentIngestionPipeline,
-    DocumentProcessor,
-    DoclingHybridChunker,
-    IngestionConfig,
-    IngestionResult,
-    ChunkingConfig,
-    DocumentChunk,
-    ProcessedDocument,
-)
-
-# Observability exports (Langfuse)
-from .integrations import (
-    get_langfuse,
-    flush_langfuse,
-    langfuse_enabled,
-    langfuse_status,
-    log_rag_query,
-    log_ingestion,
-)
 
 # Evaluation exports (RAGAS)
 try:
@@ -103,17 +103,17 @@ except ImportError:
     run_evaluation = None
 
 # Prompts exports (system prompts, reranking, entity extraction)
+# Query parameters for RAG operations
+from .core.rag import QueryParam
 from .prompts import (
     SYSTEM_PROMPT,
     SYSTEM_PROMPT_COMPACT,
+    QueryType,
     create_system_prompt,
     detect_query_type,
     select_rerank_instruction,
-    QueryType,
 )
 
-# Query parameters for RAG operations
-from .core.rag import QueryParam
 
 # CLI exports (lazy import to avoid rich dependency)
 def run_cli():

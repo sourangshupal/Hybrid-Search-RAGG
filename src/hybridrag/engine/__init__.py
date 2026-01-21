@@ -5,10 +5,10 @@ This module provides the core RAG engine with MongoDB Atlas storage support.
 """
 
 from .base_engine import BaseRAGEngine
+
 RAGEngine = BaseRAGEngine
-from .base import QueryParam
-from .base_engine import chunking_by_token_size, chunking_by_docling
-from .base import EmbeddingFunc
+from .base import EmbeddingFunc, QueryParam
+from .base_engine import chunking_by_docling, chunking_by_token_size
 
 __all__ = [
     "BaseRAGEngine",

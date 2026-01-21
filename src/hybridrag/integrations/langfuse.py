@@ -26,10 +26,11 @@ from __future__ import annotations
 import logging
 import os
 import time
+from collections.abc import Callable
 from contextlib import contextmanager
 from dataclasses import dataclass
 from functools import wraps
-from typing import TYPE_CHECKING, Any, Callable, TypeVar
+from typing import Any, TypeVar
 
 logger = logging.getLogger("hybridrag.langfuse")
 
@@ -61,7 +62,7 @@ except ImportError:
     observe = None
 
 
-def get_langfuse() -> "Langfuse | None":
+def get_langfuse() -> Langfuse | None:
     """Get or create the Langfuse client singleton."""
     global _langfuse_client
 

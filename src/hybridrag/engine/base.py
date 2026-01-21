@@ -1,36 +1,34 @@
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
-from enum import Enum
 import os
-from dotenv import load_dotenv
+from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import (
     Any,
     Literal,
     TypedDict,
     TypeVar,
-    Callable,
-    Optional,
-    Dict,
-    List,
-    AsyncIterator,
 )
-from .utils import EmbeddingFunc
-from .types import KnowledgeGraph
+
+from dotenv import load_dotenv
+
 from .constants import (
-    DEFAULT_TOP_K,
     DEFAULT_CHUNK_TOP_K,
+    DEFAULT_HISTORY_TURNS,
     DEFAULT_MAX_ENTITY_TOKENS,
     DEFAULT_MAX_RELATION_TOKENS,
     DEFAULT_MAX_TOTAL_TOKENS,
-    DEFAULT_HISTORY_TURNS,
-    DEFAULT_OLLAMA_MODEL_NAME,
-    DEFAULT_OLLAMA_MODEL_TAG,
-    DEFAULT_OLLAMA_MODEL_SIZE,
     DEFAULT_OLLAMA_CREATED_AT,
     DEFAULT_OLLAMA_DIGEST,
+    DEFAULT_OLLAMA_MODEL_NAME,
+    DEFAULT_OLLAMA_MODEL_SIZE,
+    DEFAULT_OLLAMA_MODEL_TAG,
+    DEFAULT_TOP_K,
 )
+from .types import KnowledgeGraph
+from .utils import EmbeddingFunc
 
 # use the .env that is inside the current folder
 # allows to use different .env file for each hybridrag instance
@@ -819,13 +817,13 @@ class QueryResult:
         is_streaming: Whether this is a streaming result
     """
 
-    content: Optional[str] = None
-    response_iterator: Optional[AsyncIterator[str]] = None
-    raw_data: Optional[Dict[str, Any]] = None
+    content: str | None = None
+    response_iterator: AsyncIterator[str] | None = None
+    raw_data: dict[str, Any] | None = None
     is_streaming: bool = False
 
     @property
-    def reference_list(self) -> List[Dict[str, str]]:
+    def reference_list(self) -> list[dict[str, str]]:
         """
         Convenient property to extract reference list from raw_data.
 
@@ -838,7 +836,7 @@ class QueryResult:
         return []
 
     @property
-    def metadata(self) -> Dict[str, Any]:
+    def metadata(self) -> dict[str, Any]:
         """
         Convenient property to extract metadata from raw_data.
 
@@ -861,9 +859,9 @@ class QueryContextResult:
     """
 
     context: str
-    raw_data: Dict[str, Any]
+    raw_data: dict[str, Any]
 
     @property
-    def reference_list(self) -> List[Dict[str, str]]:
+    def reference_list(self) -> list[dict[str, str]]:
         """Convenient property to extract reference list from raw_data."""
         return self.raw_data.get("data", {}).get("references", [])

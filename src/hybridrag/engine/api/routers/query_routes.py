@@ -3,12 +3,14 @@ This module contains all query-related routes for the HybridRAG API.
 """
 
 import json
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Literal
+
 from fastapi import APIRouter, Depends, HTTPException
-from .base import QueryParam
-from .api.utils_api import get_combined_auth_dependency
-from .utils import logger
 from pydantic import BaseModel, Field, field_validator
+
+from .api.utils_api import get_combined_auth_dependency
+from .base import QueryParam
+from .utils import logger
 
 router = APIRouter(tags=["query"])
 
@@ -24,47 +26,47 @@ class QueryRequest(BaseModel):
         description="Query mode",
     )
 
-    only_need_context: Optional[bool] = Field(
+    only_need_context: bool | None = Field(
         default=None,
         description="If True, only returns the retrieved context without generating a response.",
     )
 
-    only_need_prompt: Optional[bool] = Field(
+    only_need_prompt: bool | None = Field(
         default=None,
         description="If True, only returns the generated prompt without producing a response.",
     )
 
-    response_type: Optional[str] = Field(
+    response_type: str | None = Field(
         min_length=1,
         default=None,
         description="Defines the response format. Examples: 'Multiple Paragraphs', 'Single Paragraph', 'Bullet Points'.",
     )
 
-    top_k: Optional[int] = Field(
+    top_k: int | None = Field(
         ge=1,
         default=None,
         description="Number of top items to retrieve. Represents entities in 'local' mode and relationships in 'global' mode.",
     )
 
-    chunk_top_k: Optional[int] = Field(
+    chunk_top_k: int | None = Field(
         ge=1,
         default=None,
         description="Number of text chunks to retrieve initially from vector search and keep after reranking.",
     )
 
-    max_entity_tokens: Optional[int] = Field(
+    max_entity_tokens: int | None = Field(
         default=None,
         description="Maximum number of tokens allocated for entity context in unified token control system.",
         ge=1,
     )
 
-    max_relation_tokens: Optional[int] = Field(
+    max_relation_tokens: int | None = Field(
         default=None,
         description="Maximum number of tokens allocated for relationship context in unified token control system.",
         ge=1,
     )
 
-    max_total_tokens: Optional[int] = Field(
+    max_total_tokens: int | None = Field(
         default=None,
         description="Maximum total tokens budget for the entire query context (entities + relations + chunks + system prompt).",
         ge=1,
@@ -80,32 +82,32 @@ class QueryRequest(BaseModel):
         description="List of low-level keywords to refine retrieval focus. Leave empty to use the LLM to generate the keywords.",
     )
 
-    conversation_history: Optional[List[Dict[str, Any]]] = Field(
+    conversation_history: list[dict[str, Any]] | None = Field(
         default=None,
         description="Stores past conversation history to maintain context. Format: [{'role': 'user/assistant', 'content': 'message'}].",
     )
 
-    user_prompt: Optional[str] = Field(
+    user_prompt: str | None = Field(
         default=None,
         description="User-provided prompt for the query. If provided, this will be used instead of the default value from prompt template.",
     )
 
-    enable_rerank: Optional[bool] = Field(
+    enable_rerank: bool | None = Field(
         default=None,
         description="Enable reranking for retrieved text chunks. If True but no rerank model is configured, a warning will be issued. Default is True.",
     )
 
-    include_references: Optional[bool] = Field(
+    include_references: bool | None = Field(
         default=True,
         description="If True, includes reference list in responses. Affects /query and /query/stream endpoints. /query/data always includes references.",
     )
 
-    include_chunk_content: Optional[bool] = Field(
+    include_chunk_content: bool | None = Field(
         default=False,
         description="If True, includes actual chunk text content in references. Only applies when include_references=True. Useful for evaluation and debugging.",
     )
 
-    stream: Optional[bool] = Field(
+    stream: bool | None = Field(
         default=True,
         description="If True, enables streaming output for real-time responses. Only affects /query/stream endpoint.",
     )
@@ -118,8 +120,8 @@ class QueryRequest(BaseModel):
     @field_validator("conversation_history", mode="after")
     @classmethod
     def conversation_history_role_check(
-        cls, conversation_history: List[Dict[str, Any]] | None
-    ) -> List[Dict[str, Any]] | None:
+        cls, conversation_history: list[dict[str, Any]] | None
+    ) -> list[dict[str, Any]] | None:
         if conversation_history is None:
             return None
         for msg in conversation_history:
@@ -148,7 +150,7 @@ class ReferenceItem(BaseModel):
 
     reference_id: str = Field(description="Unique reference identifier")
     file_path: str = Field(description="Path to the source file")
-    content: Optional[List[str]] = Field(
+    content: list[str] | None = Field(
         default=None,
         description="List of chunk contents from this file (only present when include_chunk_content=True)",
     )
@@ -158,7 +160,7 @@ class QueryResponse(BaseModel):
     response: str = Field(
         description="The generated response",
     )
-    references: Optional[List[ReferenceItem]] = Field(
+    references: list[ReferenceItem] | None = Field(
         default=None,
         description="Reference list (Disabled when include_references=False, /query/data always includes references.)",
     )
@@ -167,10 +169,10 @@ class QueryResponse(BaseModel):
 class QueryDataResponse(BaseModel):
     status: str = Field(description="Query execution status")
     message: str = Field(description="Status message")
-    data: Dict[str, Any] = Field(
+    data: dict[str, Any] = Field(
         description="Query result data containing entities, relationships, chunks, and references"
     )
-    metadata: Dict[str, Any] = Field(
+    metadata: dict[str, Any] = Field(
         description="Query metadata including mode, keywords, and processing information"
     )
 
@@ -178,19 +180,19 @@ class QueryDataResponse(BaseModel):
 class StreamChunkResponse(BaseModel):
     """Response model for streaming chunks in NDJSON format"""
 
-    references: Optional[List[Dict[str, str]]] = Field(
+    references: list[dict[str, str]] | None = Field(
         default=None,
         description="Reference list (only in first chunk when include_references=True)",
     )
-    response: Optional[str] = Field(
+    response: str | None = Field(
         default=None, description="Response content chunk or complete response"
     )
-    error: Optional[str] = Field(
+    error: str | None = Field(
         default=None, description="Error message if processing fails"
     )
 
 
-def create_query_routes(rag, api_key: Optional[str] = None, top_k: int = 60):
+def create_query_routes(rag, api_key: str | None = None, top_k: int = 60):
     combined_auth = get_combined_auth_dependency(api_key)
 
     @router.post(

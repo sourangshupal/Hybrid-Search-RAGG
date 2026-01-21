@@ -9,26 +9,26 @@ This module provides three distinct filter builder systems:
 CRITICAL: These use DIFFERENT syntaxes for the same logical filters!
 """
 
-from .vector_search_filters import (
-    VectorSearchFilterConfig,
-    build_vector_search_filters,
-    build_vector_search_stage,
-)
 from .atlas_search_filters import (
     AtlasSearchFilterConfig,
     build_atlas_search_filters,
     build_compound_search_stage,
 )
 from .lexical_prefilters import (
+    FuzzyFilter,
+    GeoFilter,
     LexicalPrefilterConfig,
+    PhraseFilter,
+    QueryStringFilter,
+    TextFilter,
+    WildcardFilter,
     build_lexical_prefilters,
     build_search_vector_search_stage,
-    TextFilter,
-    FuzzyFilter,
-    PhraseFilter,
-    WildcardFilter,
-    GeoFilter,
-    QueryStringFilter,
+)
+from .vector_search_filters import (
+    VectorSearchFilterConfig,
+    build_vector_search_filters,
+    build_vector_search_stage,
 )
 
 __all__ = [

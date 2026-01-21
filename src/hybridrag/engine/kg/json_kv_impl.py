@@ -5,19 +5,19 @@ from typing import Any, final
 from ..base import (
     BaseKVStorage,
 )
+from ..exceptions import StorageNotInitializedError
 from ..utils import (
     load_json,
     logger,
     write_json,
 )
-from ..exceptions import StorageNotInitializedError
 from .shared_storage import (
+    clear_all_update_flags,
+    get_data_init_lock,
     get_namespace_data,
     get_namespace_lock,
-    get_data_init_lock,
     get_update_flag,
     set_all_update_flags,
-    clear_all_update_flags,
     try_initialize_namespace,
 )
 
@@ -123,7 +123,7 @@ class JsonKVStorage(BaseKVStorage):
                 data = self._data.get(id, None)
                 if data:
                     # Create a copy to avoid modifying the original data
-                    result = {k: v for k, v in data.items()}
+                    result = dict(data.items())
                     # Ensure time fields are present, provide default values for old data
                     result.setdefault("create_time", 0)
                     result.setdefault("update_time", 0)

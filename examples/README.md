@@ -63,6 +63,21 @@ Mix mode search capabilities:
 python examples/04_mix_mode_search.py
 ```
 
+### 09_langgraph_agent.py
+**Building AI Agents on HybridRAG:**
+- HybridRAG as a LangChain tool
+- LangGraph agent with ReAct pattern
+- Agent decides when to use knowledge base
+- Multi-turn conversation with state management
+
+```bash
+pip install mongodb-hybridrag[agent]
+python examples/09_langgraph_agent.py
+```
+
+This is the "user side" example - showing how to take HybridRAG and build
+sophisticated agents on top of it.
+
 ## Prerequisites
 
 ### Required API Keys
@@ -126,6 +141,26 @@ prompt = create_system_prompt(
     persona="Legal Analyst",
     entity_types=["case", "statute", "court"],
 )
+```
+
+### HybridRAG as Agent Tool
+```python
+from langchain_core.tools import tool
+from hybridrag import create_hybridrag
+
+# Initialize HybridRAG once
+rag = await create_hybridrag()
+
+@tool
+async def search_knowledge_base(query: str) -> str:
+    """Search the knowledge base for relevant information."""
+    result = await rag.query_with_sources(query, mode="mix")
+    return result.get("answer", "No information found.")
+
+# Use in LangGraph agent
+from langgraph.prebuilt import create_react_agent
+
+agent = create_react_agent(llm, [search_knowledge_base])
 ```
 
 ## Troubleshooting

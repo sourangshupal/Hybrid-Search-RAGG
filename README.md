@@ -363,11 +363,25 @@ hybridrag benchmark
 
 | Document | Description |
 |----------|-------------|
+| **[Cookbook](docs/cookbook/)** | **8 production recipes** for building AI apps |
 | [Installation Guide](docs/installation.md) | Setup and configuration |
 | [Architecture Decisions](docs/adr/) | ADRs for key decisions |
 | [Enhanced Search](docs/enhanced-search.md) | Graph traversal, mix mode |
-| [Notebooks](notebooks/) | Interactive tutorials |
-| [Examples](examples/) | Code examples |
+| [Notebooks](notebooks/) | Interactive tutorials (5) |
+| [Examples](examples/) | Code examples (8) |
+
+### Cookbook Recipes
+
+| Recipe | Topic | Description |
+|--------|-------|-------------|
+| [01](docs/cookbook/01-hybrid-search.md) | Hybrid Search | MongoDB $rankFusion implementation |
+| [02](docs/cookbook/02-lexical-prefilters.md) | Lexical Prefilters | MongoDB 8.2 fuzzy/phrase/wildcard/geo |
+| [03](docs/cookbook/03-conversation-memory.md) | Conversation Memory | Multi-turn chat with self-compaction |
+| [04](docs/cookbook/04-vector-search-optimization.md) | Vector Optimization | numCandidates, quantization, tuning |
+| [05](docs/cookbook/05-knowledge-graph.md) | Knowledge Graph | $graphLookup for entity relationships |
+| [06](docs/cookbook/06-filtering-strategies.md) | Filtering Strategies | Three filter systems explained |
+| [07](docs/cookbook/07-agent-memory-patterns.md) | Agent Memory | Long-term, working, episodic memory |
+| [08](docs/cookbook/08-production-deployment.md) | Production | Scaling, monitoring, security |
 
 ### Architecture Decision Records
 

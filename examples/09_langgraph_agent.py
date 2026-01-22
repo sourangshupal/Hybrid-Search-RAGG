@@ -16,12 +16,12 @@ This is the "user side" of HybridRAG - demonstrating how to take the boilerplate
 and build sophisticated agents on top of it.
 
 Prerequisites:
-    pip install mongodb-hybridrag[agent]
+    pip install mongodb-hybridrag[agent] langchain-google-genai
 
     # Configure .env with:
     # MONGODB_URI=mongodb+srv://...
     # VOYAGE_API_KEY=pa-...
-    # ANTHROPIC_API_KEY=sk-ant-...
+    # GEMINI_API_KEY=AIza...  (or ANTHROPIC_API_KEY for Claude)
 
 Run:
     python examples/09_langgraph_agent.py
@@ -44,17 +44,22 @@ Architecture:
 from __future__ import annotations
 
 import asyncio
+import os
 import sys
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Annotated, Any, Literal, TypedDict
+from typing import TYPE_CHECKING, Annotated, Any, Literal, TypedDict
+
+from dotenv import load_dotenv
+
+# Load .env file before checking environment variables
+load_dotenv()
 
 # Add src to path for development
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 # Check for LangGraph dependencies
 try:
-    from langchain_anthropic import ChatAnthropic
     from langchain_core.messages import BaseMessage, HumanMessage
     from langchain_core.tools import tool
     from langgraph.graph import END, StateGraph
@@ -66,7 +71,51 @@ except ImportError as e:
     print(f"Missing: {e}")
     sys.exit(1)
 
-from hybridrag import create_hybridrag
+from hybridrag import create_hybridrag  # noqa: E402
+
+# LLM provider detection (Gemini preferred, Anthropic fallback)
+if TYPE_CHECKING:
+    from langchain_anthropic import ChatAnthropic
+    from langchain_google_genai import ChatGoogleGenerativeAI
+
+    _LLMClass = type[ChatGoogleGenerativeAI] | type[ChatAnthropic]
+
+_llm_provider: str | None = None
+_llm_class: _LLMClass | None = None
+
+# Check for Gemini first (user has GEMINI_API_KEY)
+try:
+    from langchain_google_genai import ChatGoogleGenerativeAI
+
+    if os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"):
+        _llm_provider = "gemini"
+        _llm_class = ChatGoogleGenerativeAI
+        # Set the API key for langchain-google-genai
+        gemini_key = os.getenv("GEMINI_API_KEY")
+        if gemini_key and not os.getenv("GOOGLE_API_KEY"):
+            os.environ["GOOGLE_API_KEY"] = gemini_key
+except ImportError:
+    pass
+
+# Fallback to Anthropic
+if _llm_provider is None:
+    try:
+        from langchain_anthropic import ChatAnthropic
+
+        if os.getenv("ANTHROPIC_API_KEY"):
+            _llm_provider = "anthropic"
+            _llm_class = ChatAnthropic
+    except ImportError:
+        pass
+
+if _llm_provider is None:
+    print("ERROR: No LLM provider available.")
+    print("Set GEMINI_API_KEY or ANTHROPIC_API_KEY in your .env file")
+    print("Install with: pip install langchain-google-genai  (for Gemini)")
+    print("         or: pip install langchain-anthropic  (for Claude)")
+    sys.exit(1)
+
+print(f"Using LLM provider: {_llm_provider}")
 
 # Global HybridRAG instance (initialized once)
 _hybridrag_instance = None
@@ -185,11 +234,19 @@ async def agent_node(state: AgentState) -> dict[str, Any]:
     2. Sends it to the LLM with tool definitions
     3. Returns the LLM's decision (tool call or direct response)
     """
-    # Create LLM with tools bound
-    llm = ChatAnthropic(
-        model="claude-sonnet-4-20250514",
-        temperature=0,
-    )
+    # Create LLM based on available provider
+    # _llm_class is guaranteed non-None here (checked at module load)
+    assert _llm_class is not None, "LLM class not initialized"
+    if _llm_provider == "gemini":
+        llm = _llm_class(
+            model="gemini-2.0-flash",
+            temperature=0,
+        )
+    else:  # anthropic
+        llm = _llm_class(
+            model="claude-sonnet-4-20250514",
+            temperature=0,
+        )
 
     tools = [search_knowledge_base, get_document_stats]
     llm_with_tools = llm.bind_tools(tools)

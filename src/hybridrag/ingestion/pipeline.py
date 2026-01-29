@@ -87,6 +87,63 @@ class DocumentIngestionPipeline:
             enable_audio=self.config.enable_audio_transcription
         )
         self.chunker = create_chunker(self.config.chunking)
+        self._indexes_created = False
+
+    async def _ensure_indexes(self) -> None:
+        """
+        Create indexes on chunks collection for optimal query performance.
+
+        Per MongoDB best practices:
+        - Rule 1.3: Index everything in $lookup foreign fields
+        - Rule 1.4: Index fields used in filtering/sorting
+
+        These indexes ensure plug-and-play performance for any new clone.
+        """
+        if self._indexes_created:
+            return
+
+        chunks_col = self.db[self.chunks_collection]
+        documents_col = self.db[self.documents_collection]
+
+        try:
+            # Chunks collection indexes
+            # 1. document_id - for document lookups and joins
+            await chunks_col.create_index("document_id", background=True)
+
+            # 2. metadata.source - for filtering by source file
+            await chunks_col.create_index("metadata.source", background=True)
+
+            # 3. chunk_index - for ordering chunks within a document
+            await chunks_col.create_index(
+                [("document_id", 1), ("chunk_index", 1)],
+                background=True,
+            )
+
+            # 4. created_at - for time-based queries (descending for recent first)
+            await chunks_col.create_index(
+                [("created_at", -1)],
+                background=True,
+            )
+
+            # Documents collection indexes
+            # 1. source - for filtering by source file
+            await documents_col.create_index("source", background=True)
+
+            # 2. created_at - for time-based queries
+            await documents_col.create_index(
+                [("created_at", -1)],
+                background=True,
+            )
+
+            logger.debug(
+                f"[PIPELINE] Created indexes on {self.chunks_collection} "
+                f"and {self.documents_collection}"
+            )
+            self._indexes_created = True
+
+        except Exception as e:
+            # Log but don't fail - indexes are optimization, not required
+            logger.warning(f"[PIPELINE] Error creating indexes: {e}")
 
     async def ingest_folder(
         self,
@@ -108,6 +165,9 @@ class DocumentIngestionPipeline:
         if not folder_path.exists():
             logger.error(f"Folder not found: {folder_path}")
             return []
+
+        # Ensure indexes exist for optimal performance (idempotent)
+        await self._ensure_indexes()
 
         # Discover all supported files
         files = self._discover_files(folder_path)
